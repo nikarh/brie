@@ -9,7 +9,7 @@ use std::{
 use log::{debug, info};
 use thiserror::Error;
 
-use crate::run::CommandRunner;
+use crate::command::Runner;
 
 #[derive(Debug, Error)]
 pub enum WinePrefixError {
@@ -45,7 +45,7 @@ pub enum MountsError {
 #[error(transparent)]
 pub struct BeforeError(#[from] io::Error);
 
-impl CommandRunner {
+impl Runner {
     pub fn prepare_wine_prefix(&self) -> Result<(), WinePrefixError> {
         let prefix = self.wine_prefix();
         if prefix.exists() {
@@ -58,7 +58,7 @@ impl CommandRunner {
             let _ = fs::create_dir_all(parent);
         }
 
-        self.run("wine", &["__INIT_PREFIX"])
+        self.run("wineboot", &["-u"])
             .map_err(WinePrefixError::Wine)?;
         self.run("wineserver", &["--wait"])
             .map_err(WinePrefixError::Wine)?;

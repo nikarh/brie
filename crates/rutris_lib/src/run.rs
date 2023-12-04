@@ -1,77 +1,168 @@
-use std::{
-    collections::HashMap,
-    env,
-    ffi::OsStr,
-    io,
-    path::{Path, PathBuf},
-    process::{Command, ExitStatus, Stdio},
+use std::{collections::HashMap, fs, io};
+
+use fslock::LockFile;
+use log::info;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+
+use crate::{
+    command::Runner,
+    library::{
+        ensure_cabextract_exists, ensure_library_exists, ensure_winetricks_exists, Downloadable,
+    },
+    runtime, WithContext,
 };
+use crate::{
+    config::{Paths, Unit},
+    prepare::{BeforeError, MountsError, WinePrefixError, WinetricksError},
+};
+use crate::{dll, library};
+use crate::{join, runtime::get_runtime};
 
-use log::debug;
-use path_absolutize::Absolutize;
-
-pub struct CommandRunner {
-    envs: HashMap<String, String>,
-    prefix: PathBuf,
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("Runtime error. {0}")]
+    Runtime(#[from] runtime::Error),
+    #[error("Library `{0}` download error. {1}")]
+    LibraryDownload(&'static str, library::Error),
+    #[error("Library installation error. {0}")]
+    LibraryInstall(#[from] dll::Error),
+    #[error("Unable to set up wine prefix. {0}")]
+    Prefix(#[from] WinePrefixError),
+    #[error("Winetricks error. {0}")]
+    Tricks(#[from] WinetricksError),
+    #[error("Unable to symlink mounts. {0}")]
+    Mounts(#[from] MountsError),
+    #[error("Before command error. {0}")]
+    Before(#[from] BeforeError),
+    #[error("Lock error. {0}")]
+    Lock(#[source] io::Error),
+    #[error("Unable to create libraries folder. {0}")]
+    Libraries(#[source] io::Error),
+    #[error("Command runner error. {0}")]
+    Runner(#[source] io::Error),
+    #[error("Wineserver wait error. {0}")]
+    Wait(#[source] io::Error),
+    #[error("Run error. {0}")]
+    Run(#[source] io::Error),
 }
 
-impl CommandRunner {
-    pub fn new(
-        wine: impl AsRef<Path>,
-        mut envs: HashMap<String, String>,
-        prefixes_path: impl AsRef<Path>,
-        prefix: &str,
-    ) -> Result<Self, io::Error> {
-        let wine = wine.as_ref();
+impl<T> WithContext<Result<T, Error>, &'static str> for Result<T, library::Error> {
+    fn context(self, context: &'static str) -> Result<T, Error> {
+        self.map_err(|e| Error::LibraryDownload(context, e))
+    }
+}
 
-        let wine_path = wine
-            .absolutize()?
-            .parent()
-            .and_then(|p| p.to_str())
-            .map(ToString::to_string);
+pub fn run(paths: &Paths, config: Unit) -> Result<(), Error> {
+    info!("Preparing environment with config: {config:#?}");
+    info!("Paths: {paths:?}");
 
-        let path = env::var_os("PATH")
-            .and_then(|p| p.into_string().ok())
-            .and_then(|rest| wine_path.as_ref().map(|p| format!("{p}:{rest}")))
-            .or(wine_path);
+    info!("Obtaining a lock on dependency download");
+    fs::create_dir_all(&paths.libraries).map_err(Error::Libraries)?;
+    let mut lock = LockFile::open(&paths.libraries.join(".rutris-lock")).map_err(Error::Lock)?;
+    lock.lock_with_pid().map_err(Error::Lock)?;
 
-        if let Some(path) = path {
-            envs.insert("PATH".to_owned(), path);
+    let (runtime, winetricks, cabextract, libraries) = join!(
+        || get_runtime(&paths.libraries, &config.runtime),
+        || ensure_winetricks_exists(&paths.libraries).context("winetricks"),
+        || ensure_cabextract_exists(&paths.libraries).context("cabextract"),
+        || {
+            config
+                .libraries
+                .par_iter()
+                .map(|(l, version)| {
+                    ensure_library_exists(l, &paths.libraries, version)
+                        .map(|path| (*l, path))
+                        .context(l.name())
+                })
+                .collect::<Result<HashMap<_, _>, _>>()
+        }
+    );
+
+    drop(lock);
+
+    let runtime = runtime?;
+    let libraries = libraries?;
+    winetricks?;
+    cabextract?;
+
+    let runner = Runner::new(runtime, config.env, paths, &config.prefix).map_err(Error::Runner)?;
+    runner.prepare_wine_prefix()?;
+
+    info!("Obtaining a lock on wineprefix");
+    let mut lock =
+        LockFile::open(&runner.wine_prefix().join(".rutris-lock")).map_err(Error::Lock)?;
+    lock.lock_with_pid().map_err(Error::Lock)?;
+    runner.winetricks(&config.winetricks)?;
+    runner.mounts(&config.mounts)?;
+    runner.install_libraries(&libraries)?;
+    runner.before(&config.before)?;
+    runner.run("wineserver", &["--wait"]).map_err(Error::Wait)?;
+    drop(lock);
+
+    if !config.command.is_empty() {
+        info!("Running: {:?} in {:?}", config.command, config.cd);
+        let mut command = runner.command("wine", &config.command);
+        if let Some(cd) = &config.cd {
+            command.current_dir(cd);
         }
 
-        envs.insert(
-            "WINEDLLOVERRIDES".to_owned(),
-            "winemenubuilder.exe=".to_owned(),
-        );
-
-        let prefix = prefixes_path.as_ref().absolutize()?.join(prefix);
-
-        let prefix_str = prefix.to_string_lossy();
-        envs.insert("WINEPREFIX".to_owned(), prefix_str.to_string());
-
-        Ok(Self { envs, prefix })
+        command.status().map_err(Error::Run)?;
     }
 
-    pub fn command(&self, command: &str, args: &[impl AsRef<OsStr>]) -> Command {
-        let mut command = Command::new(command);
+    info!("Waiting for wineserver to exit");
+    runner.run("wineserver", &["--wait"]).map_err(Error::Wait)?;
 
-        command
-            .args(args)
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .envs(&self.envs);
+    Ok(())
+}
 
-        debug!("Running command: {:?}", command);
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, path::Path};
 
-        command
-    }
+    use indicatif_log_bridge::LogWrapper;
 
-    pub fn run(&self, command: &str, args: &[impl AsRef<OsStr>]) -> Result<ExitStatus, io::Error> {
-        self.command(command, args).status()
-    }
+    use crate::{
+        config::{Library, Paths, ReleaseVersion, Runtime, Unit},
+        MP,
+    };
 
-    pub fn wine_prefix(&self) -> &Path {
-        &self.prefix
+    use super::run;
+
+    #[test]
+    pub fn test_run() {
+        let mut builder = pretty_env_logger::formatted_builder();
+        builder.filter_level(log::LevelFilter::Info);
+        if let Ok(s) = ::std::env::var("RUST_LOG") {
+            builder.parse_filters(&s);
+        }
+
+        LogWrapper::new(MP.clone(), builder.build())
+            .try_init()
+            .unwrap();
+
+        run(
+            &Paths {
+                libraries: Path::new(".tmp").join("libraries"),
+                prefixes: Path::new(".tmp").join("prefixes"),
+            },
+            Unit {
+                runtime: Runtime::GeProton(ReleaseVersion::Latest),
+                libraries: [
+                    (Library::DxvkGplAsync, ReleaseVersion::Latest),
+                    (Library::DxvkNvapi, ReleaseVersion::Latest),
+                    (Library::Vkd3dProton, ReleaseVersion::Latest),
+                ]
+                .into(),
+                env: HashMap::default(),
+                prefix: "TEST_PREFIX".into(),
+
+                cd: None,
+                command: vec!["winecfg".into()],
+                mounts: [('r', "/etc".into())].into(),
+                before: vec![],
+                winetricks: vec![],
+            },
+        )
+        .unwrap();
     }
 }

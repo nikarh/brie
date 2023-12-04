@@ -1,20 +1,18 @@
 use std::{io, path::Path};
 
-use thiserror::Error;
-
 use crate::{
     config::Runtime,
-    libraries::{ensure_library_exists, LibraryDownloadError, WineGe},
+    library::{self, ensure_library_exists, WineGe},
 };
 
-#[derive(Error, Debug)]
+#[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("System wine runtime not found. {0}")]
     Which(#[from] which::Error),
     #[error("IO Error. {0}")]
     Io(#[from] io::Error),
     #[error("Download error. {0}")]
-    Library(#[from] LibraryDownloadError),
+    Library(#[from] library::Error),
 }
 
 /// This function checks if a requested runtime exists, and downloads it if it doesn't.
@@ -29,16 +27,8 @@ pub(crate) fn get_runtime(
     Ok(match runtime {
         Runtime::System(None) => which::which("wine")?,
         Runtime::System(Some(path)) => which::which(path.join("wine"))?,
-        Runtime::GeProton(version) => {
-            let wine_path = cache_path
-                .as_ref()
-                .join(version.as_path())
-                .join("bin")
-                .join("wine");
-
-            ensure_library_exists(&WineGe, cache_path, version)?;
-
-            wine_path
-        }
+        Runtime::GeProton(version) => ensure_library_exists(&WineGe, cache_path, version)?
+            .join("bin")
+            .join("wine"),
     })
 }

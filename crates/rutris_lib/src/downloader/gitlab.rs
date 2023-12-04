@@ -2,7 +2,7 @@ use derive_more::Constructor;
 use log::info;
 use serde::Deserialize;
 
-use super::{GitRepo, Release, ReleaseError, ReleaseProvider, ReleaseVersion, USER_AGENT_HEADER};
+use super::{Error, GitRepo, Release, ReleaseProvider, ReleaseVersion, USER_AGENT_HEADER};
 
 #[derive(Deserialize, Debug)]
 pub struct GlFile {
@@ -23,11 +23,7 @@ impl<'a, E> ReleaseProvider for Gitlab<'a, E>
 where
     E: for<'b> Fn(&'b str) -> Option<&'b str>,
 {
-    fn get_release(
-        &self,
-        repo: &GitRepo<'_>,
-        version: &ReleaseVersion,
-    ) -> Result<Release, ReleaseError> {
+    fn get_release(&self, repo: &GitRepo<'_>, version: &ReleaseVersion) -> Result<Release, Error> {
         let url = format!(
             "https://gitlab.com/api/v4/projects/{repo}/repository/tree?path={tree_path}",
             repo = format!("{repo}").replace('/', "%2F"),
@@ -53,9 +49,9 @@ where
             }
         };
 
-        let release = release.ok_or(ReleaseError::NoMatchingAsset)?;
+        let release = release.ok_or(Error::NoMatchingAsset)?;
         let version = (self.version_extractor)(&release.name)
-            .ok_or(ReleaseError::NoMatchingAsset)?
+            .ok_or(Error::NoMatchingAsset)?
             .to_owned();
         let filename = release.name;
 

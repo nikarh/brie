@@ -1,7 +1,6 @@
 use std::io;
 
 use derive_more::{Constructor, Display};
-use thiserror::Error;
 
 use crate::config::ReleaseVersion;
 
@@ -23,8 +22,8 @@ pub struct Release {
     pub url: String,
 }
 
-#[derive(Error, Debug)]
-pub enum ReleaseError {
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
     #[error("Unable to get release data. {0}")]
     ReleaseGet(#[from] Box<ureq::Error>),
     #[error("Unable to parse release data. {0}")]
@@ -34,11 +33,7 @@ pub enum ReleaseError {
 }
 
 pub trait ReleaseProvider {
-    fn get_release(
-        &self,
-        repo: &GitRepo<'_>,
-        version: &ReleaseVersion,
-    ) -> Result<Release, ReleaseError>;
+    fn get_release(&self, repo: &GitRepo<'_>, version: &ReleaseVersion) -> Result<Release, Error>;
 }
 
 pub struct ReleaseStream<R: io::Read> {
@@ -46,10 +41,8 @@ pub struct ReleaseStream<R: io::Read> {
     pub len: Option<usize>,
 }
 
-pub fn download_release(
-    release: &Release,
-) -> Result<ReleaseStream<impl io::Read>, Box<ureq::Error>> {
-    let response = ureq::get(&release.url)
+pub fn download_file(url: &str) -> Result<ReleaseStream<impl io::Read>, Box<ureq::Error>> {
+    let response = ureq::get(url)
         .set("User-Agent", USER_AGENT_HEADER)
         .call()
         .map_err(Box::new)?;

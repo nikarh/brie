@@ -1,6 +1,35 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
+use serde::{Deserialize, Serialize};
 use strum::Display;
+
+#[derive(Debug)]
+pub struct Unit {
+    pub runtime: Runtime,
+    pub libraries: HashMap<Library, ReleaseVersion>,
+
+    pub env: HashMap<String, String>,
+    pub prefix: String,
+
+    pub mounts: HashMap<char, String>,
+    pub before: Vec<Vec<String>>,
+    pub winetricks: Vec<String>,
+
+    pub cd: Option<String>,
+    pub command: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum Library {
+    Dxvk,
+    DxvkGplAsync,
+    DxvkNvapi,
+    Vkd3dProton,
+}
 
 #[derive(Debug)]
 pub enum Runtime {
@@ -16,7 +45,7 @@ pub enum ReleaseVersion {
 
 impl ReleaseVersion {
     #[must_use]
-    pub fn as_path(&self) -> &str {
+    pub(crate) fn as_path(&self) -> &str {
         match self {
             ReleaseVersion::Latest => "latest",
             ReleaseVersion::Tag(tag) => tag,
@@ -31,37 +60,11 @@ pub struct Paths {
 }
 
 impl Paths {
-    pub fn xdg() -> Result<Self, xdg::BaseDirectoriesError> {
-        let xdg = xdg::BaseDirectories::with_profile("rutris", "wine")?;
-        let data_home = xdg.get_data_home();
-
-        Ok(Self {
+    #[must_use]
+    pub fn new(data_home: &Path) -> Self {
+        Self {
             libraries: data_home.join("libraries"),
             prefixes: data_home.join("prefixes"),
-        })
+        }
     }
-}
-
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum Library {
-    Dxvk,
-    DxvkGplAsync,
-    DxvkNvapi,
-    // NvidiaLibs,
-    Vkd3dProton,
-}
-
-#[derive(Debug)]
-pub struct Config {
-    pub runtime: Runtime,
-    pub libraries: HashMap<Library, ReleaseVersion>,
-
-    pub env: HashMap<String, String>,
-    pub prefix: String,
-    pub cd: String,
-    pub command: Vec<String>,
-
-    pub mounts: HashMap<char, String>,
-    pub before: Vec<Vec<String>>,
-    pub winetricks: Vec<String>,
 }

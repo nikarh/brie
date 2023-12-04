@@ -1,5 +1,5 @@
 [package]
-name = "rutris_wine"
+name = "rutris_lib"
 version = "0.1.0"
 edition = "2021"
 
@@ -20,6 +20,7 @@ libc.workspace = true
 path-absolutize.workspace = true
 indicatif-log-bridge.workspace = true
 lazy_static.workspace = true
+fslock.workspace = true
 
 flate2.workspace = true
 xz2.workspace = true
@@ -30,3 +31,6 @@ uuid.workspace = true
 [dev-dependencies]
 pretty_env_logger.workspace = true
 env_logger.workspace = true
+
+[lints]
+workspace = true

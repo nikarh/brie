@@ -8,7 +8,7 @@ use std::{
 use log::{debug, info};
 use thiserror::Error;
 
-use crate::{config::Library, libraries::DownloadableLibrary, run::CommandRunner};
+use crate::{command::Runner, config::Library, library::Downloadable, WithContext};
 
 mod dl {
     use std::{ffi::CStr, io};
@@ -98,24 +98,20 @@ pub enum InstallLibraryError {
 }
 
 #[derive(Debug, Error)]
-pub enum InstallError {
+pub enum Error {
     #[error("Install {0} library error. {0}")]
     Library(&'static str, InstallLibraryError),
     #[error("Unable to update state file. {0}")]
     StateWrite(io::Error),
 }
 
-trait WithContext<Target, Context> {
-    fn context(self, context: Context) -> Target;
-}
-
-impl<T> WithContext<Result<T, InstallError>, &'static str> for Result<T, InstallLibraryError> {
-    fn context(self, context: &'static str) -> Result<T, InstallError> {
-        self.map_err(|e| InstallError::Library(context, e))
+impl<T> WithContext<Result<T, Error>, &'static str> for Result<T, InstallLibraryError> {
+    fn context(self, context: &'static str) -> Result<T, Error> {
+        self.map_err(|e| Error::Library(context, e))
     }
 }
 
-impl CommandRunner {
+impl Runner {
     fn copy_dll(&self, dll: impl AsRef<Path>, arch: Arch) -> Result<(), CopyError> {
         let dest = self
             .wine_prefix()
@@ -135,22 +131,15 @@ impl CommandRunner {
     }
 
     fn override_dll(&self, dll: &str) -> Result<(), OverrideError> {
-        debug!("Overriding {dll} to native in wine...");
+        debug!("Overriding {dll} to native in wine");
+
+        let key = r"HKEY_CURRENT_USER\Software\Wine\DllOverrides";
 
         self.command(
             "wine",
-            &[
-                "reg",
-                "add",
-                r"'HKEY_CURRENT_USER\Software\Wine\DllOverrides'",
-                "/v",
-                &dll,
-                "/d",
-                "native",
-                "/f",
-            ],
+            &["reg", "add", key, "/v", &dll, "/d", "native", "/f"],
         )
-        .env("WINEDLLOVERRIDES", "mscoree,mshtml=")
+        .env("WINEDLLOVERRIDES", "winemenubuilder.exe,mscoree,mshtml=")
         .status()?;
 
         Ok(())
@@ -175,17 +164,14 @@ impl CommandRunner {
         Ok(())
     }
 
-    pub fn install_libraries(
-        &self,
-        libraries: &HashMap<Library, PathBuf>,
-    ) -> Result<(), InstallError> {
+    pub fn install_libraries(&self, libraries: &HashMap<Library, PathBuf>) -> Result<(), Error> {
         let overrides_file = self.wine_prefix().join(".overrides");
         let overrides = fs::read_to_string(&overrides_file).unwrap_or_default();
         let mut overrides = Overrides::new(overrides.lines().collect());
 
         for (library, path) in libraries {
             let name = library.name();
-            info!("Copying library {name} dlls from {:?}...", path.display());
+            info!("Copying library {name} dlls from {:?}", path.display());
 
             match library {
                 Library::Dxvk | Library::DxvkGplAsync => {
@@ -212,7 +198,7 @@ impl CommandRunner {
         }
 
         if let Ok(path) = dl::find_dl_path("libGLX_nvidia.so.0") {
-            info!("Copying system nvngx...");
+            info!("Copying system nvngx dlls");
 
             let path = Path::new(&path).join("nvidia").join("wine");
 
@@ -239,10 +225,10 @@ impl CommandRunner {
             .write(true)
             .create(true)
             .open(&overrides_file)
-            .map_err(InstallError::StateWrite)?;
+            .map_err(Error::StateWrite)?;
 
         for new in overrides.new {
-            writeln!(file, "{new}").map_err(InstallError::StateWrite)?;
+            writeln!(file, "{new}").map_err(Error::StateWrite)?;
         }
 
         Ok(())

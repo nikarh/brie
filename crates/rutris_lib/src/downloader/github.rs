@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::downloader::USER_AGENT_HEADER;
 
-use super::{GitRepo, Release, ReleaseError, ReleaseProvider, ReleaseVersion};
+use super::{Error, GitRepo, Release, ReleaseProvider, ReleaseVersion};
 
 const ACCEPT_HEADER: &str = "application/vnd.github.v3+json";
 
@@ -33,11 +33,7 @@ impl<M> ReleaseProvider for Github<M>
 where
     M: Fn(&GhAsset) -> bool,
 {
-    fn get_release(
-        &self,
-        repo: &GitRepo<'_>,
-        version: &ReleaseVersion,
-    ) -> Result<Release, ReleaseError> {
+    fn get_release(&self, repo: &GitRepo<'_>, version: &ReleaseVersion) -> Result<Release, Error> {
         let url = match version {
             ReleaseVersion::Latest => {
                 format!("https://api.github.com/repos/{repo}/releases/latest")
@@ -60,7 +56,7 @@ where
             .assets
             .into_iter()
             .find(|asset| (self.asset_matcher)(asset))
-            .ok_or(ReleaseError::NoMatchingAsset)?;
+            .ok_or(Error::NoMatchingAsset)?;
 
         Ok(Release {
             version: release.tag_name,

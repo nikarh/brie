@@ -1,12 +1,12 @@
 use std::{
-    fs,
+    fs::{self, File, Permissions},
     io::{self},
-    os::unix,
+    os::unix::{self, fs::PermissionsExt},
     path::{Path, PathBuf},
 };
 
 use flate2::read::GzDecoder;
-use indicatif::{ProgressBar, ProgressState, ProgressStyle};
+use indicatif::{ProgressBar, ProgressFinish, ProgressState, ProgressStyle};
 use log::info;
 use tar::Archive;
 use thiserror::Error;
@@ -16,18 +16,18 @@ use zstd::stream::Decoder as ZstDecoder;
 use crate::{
     config::{Library, ReleaseVersion},
     downloader::{
-        self, download_release,
+        self, download_file,
         github::{with_suffix, Github},
         gitlab::{filename_version, Gitlab},
-        GitRepo, ReleaseProvider,
+        GitRepo, ReleaseProvider, ReleaseStream,
     },
     MP,
 };
 
 #[derive(Error, Debug)]
-pub enum LibraryDownloadError {
+pub enum Error {
     #[error("Release check error. {0}")]
-    Release(#[from] downloader::ReleaseError),
+    Release(#[from] downloader::Error),
     #[error("Download error. {0}")]
     Http(#[from] Box<ureq::Error>),
     #[error("IO error. {0}")]
@@ -36,7 +36,7 @@ pub enum LibraryDownloadError {
     UnknownFormat(String),
 }
 
-pub trait DownloadableLibrary {
+pub trait Downloadable {
     fn name(&self) -> &'static str;
 
     fn substring(&self) -> &'static str {
@@ -46,12 +46,12 @@ pub trait DownloadableLibrary {
     fn get_release(
         &self,
         version: &ReleaseVersion,
-    ) -> Result<downloader::Release, downloader::ReleaseError>;
+    ) -> Result<downloader::Release, downloader::Error>;
 }
 
 pub struct WineGe;
 
-impl DownloadableLibrary for WineGe {
+impl Downloadable for WineGe {
     fn name(&self) -> &'static str {
         "wine-ge-custom"
     }
@@ -63,27 +63,26 @@ impl DownloadableLibrary for WineGe {
     fn get_release(
         &self,
         version: &ReleaseVersion,
-    ) -> Result<downloader::Release, downloader::ReleaseError> {
+    ) -> Result<downloader::Release, downloader::Error> {
         Github::new(with_suffix(".tar.xz"))
             .get_release(&GitRepo::new("GloriousEggroll", "wine-ge-custom"), version)
     }
 }
 
-impl DownloadableLibrary for Library {
+impl Downloadable for Library {
     fn name(&self) -> &'static str {
         match self {
             Library::Dxvk => "dxvk",
             Library::DxvkGplAsync => "dxvk-gplasync",
             Library::DxvkNvapi => "dxvk-nvapi",
             Library::Vkd3dProton => "vkd3d-proton",
-            // Library::NvidiaLibs => "nvidia-libs",
         }
     }
 
     fn get_release(
         &self,
         version: &ReleaseVersion,
-    ) -> Result<downloader::Release, downloader::ReleaseError> {
+    ) -> Result<downloader::Release, downloader::Error> {
         match self {
             Library::Dxvk => {
                 Github::new(|a| a.name.ends_with(".tar.gz") && !a.name.contains("sniper"))
@@ -177,39 +176,18 @@ impl<'a> Drop for DirGuard<'a> {
     }
 }
 
-pub(crate) fn ensure_library_exists(
-    library: &impl DownloadableLibrary,
-    cache_dir: impl AsRef<Path>,
-    version: &ReleaseVersion,
-) -> Result<PathBuf, LibraryDownloadError> {
-    let name = library.name();
-    let cache_dir = cache_dir.as_ref();
-
-    info!("Checking library {name} {version}...");
-    let cache_dir = cache_dir.join(name);
-    let version_dir = cache_dir.join(version.as_path());
-
-    if version_dir.exists() {
-        return Ok(version_dir);
-    }
-
-    info!("Downloading library {name} {version}...");
-    let release = library.get_release(version)?;
-    let dest = cache_dir.join(&release.version);
-
-    fs::create_dir_all(&dest)?;
-
-    let mut guard = DirGuard::new(&dest);
-
-    let lib = download_release(&release)?;
-
-    let pb = match lib.len {
+fn progress(
+    name: &'static str,
+    stream: ReleaseStream<impl io::Read>,
+) -> (impl io::Read, ProgressBar) {
+    let pb = match stream.len {
         Some(len) => ProgressBar::new(len as u64),
         None => ProgressBar::new_spinner(),
     };
 
     let pb = pb
         .with_message(name)
+        .with_finish(ProgressFinish::AndLeave)
         .with_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta}) - {msg:>15}")
         .unwrap()
         .with_key("eta", |state: &ProgressState, w: &mut dyn std::fmt::Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
@@ -217,14 +195,42 @@ pub(crate) fn ensure_library_exists(
 
     let pb = MP.add(pb);
 
-    let lib = pb.wrap_read(lib.body);
+    (pb.wrap_read(stream.body), pb)
+}
+
+pub fn ensure_library_exists(
+    library: &impl Downloadable,
+    cache_dir: impl AsRef<Path>,
+    version: &ReleaseVersion,
+) -> Result<PathBuf, Error> {
+    let name = library.name();
+    let cache_dir = cache_dir.as_ref();
+
+    info!("Checking library {name} {version}");
+    let cache_dir = cache_dir.join(name);
+    let version_dir = cache_dir.join(version.as_path());
+
+    if version_dir.exists() {
+        return Ok(version_dir);
+    }
+
+    info!("Downloading library {name} {version}");
+    let release = library.get_release(version)?;
+    let dest = cache_dir.join(&release.version);
+
+    fs::create_dir_all(&dest)?;
+
+    let mut guard = DirGuard::new(&dest);
+
+    let lib = download_file(&release.url)?;
+    let (lib, pb) = progress(name, lib);
 
     match &release.filename {
         n if n.ends_with(".tar.gz") => untar(GzDecoder::new(lib), &dest)?,
         n if n.ends_with(".tar.xz") => untar(XzDecoder::new(lib), &dest)?,
         n if n.ends_with(".tar.zst") => untar(ZstDecoder::new(lib)?, &dest)?,
         _ => {
-            return Err(LibraryDownloadError::UnknownFormat(release.filename));
+            return Err(Error::UnknownFormat(release.filename));
         }
     }
 
@@ -243,6 +249,54 @@ pub(crate) fn ensure_library_exists(
     Ok(version_dir)
 }
 
+pub fn ensure_winetricks_exists(cache_dir: impl AsRef<Path>) -> Result<(), Error> {
+    let target = cache_dir.as_ref().join(".bin").join("winetricks");
+    if target.exists() {
+        return Ok(());
+    }
+
+    info!("Downloading winetricks");
+    let url = "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks";
+    let file = download_file(url)?;
+    let (mut read, pb) = progress("winetricks", file);
+
+    let _ = fs::create_dir_all(cache_dir.as_ref().join(".bin"));
+    let mut file = File::create(target)?;
+    file.set_permissions(Permissions::from_mode(0o755))?;
+    io::copy(&mut read, &mut file)?;
+
+    pb.finish();
+    Ok(())
+}
+
+pub fn ensure_cabextract_exists(cache_dir: impl AsRef<Path>) -> Result<(), Error> {
+    let target = cache_dir.as_ref().join(".bin").join("cabextract");
+    if target.exists() {
+        return Ok(());
+    }
+
+    info!("Downloading cabextract");
+    let url = "https://archlinux.org/packages/extra/x86_64/cabextract/download/";
+    let file = download_file(url)?;
+    let (read, pb) = progress("winetricks", file);
+
+    let _ = fs::create_dir_all(cache_dir.as_ref().join(".bin"));
+    let mut tar = Archive::new(ZstDecoder::new(read)?);
+    for e in tar.entries()? {
+        let mut e = e?;
+
+        if e.path()?.file_name().unwrap_or_default() == "cabextract" {
+            let mut file = File::create(target)?;
+            file.set_permissions(Permissions::from_mode(0o755))?;
+            io::copy(&mut e, &mut file)?;
+            break;
+        }
+    }
+
+    pb.finish();
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use std::path::Path;
@@ -251,7 +305,7 @@ mod test {
 
     use crate::{
         config::{Library, ReleaseVersion, Runtime},
-        libraries::ensure_library_exists,
+        library::ensure_library_exists,
         runtime::get_runtime,
     };
 
@@ -264,7 +318,6 @@ mod test {
             Library::Dxvk,
             Library::DxvkGplAsync,
             Library::DxvkNvapi,
-            // Library::NvidiaLibs,
             Library::Vkd3dProton,
         ];
 

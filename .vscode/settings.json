@@ -4,6 +4,7 @@
         "dosdevices",
         "Dxvk",
         "Eggroll",
+        "fslock",
         "Kristian",
         "Nvapi",
         "reqwest",
