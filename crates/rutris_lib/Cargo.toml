@@ -1,0 +1,32 @@
+[package]
+name = "rutris_wine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+xdg.workspace = true
+thiserror.workspace = true
+which.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bytes.workspace = true
+ureq.workspace = true
+strum.workspace = true
+derive_more.workspace = true
+log.workspace = true
+indicatif.workspace = true
+rayon.workspace = true
+libc.workspace = true
+path-absolutize.workspace = true
+indicatif-log-bridge.workspace = true
+lazy_static.workspace = true
+
+flate2.workspace = true
+xz2.workspace = true
+tar.workspace = true
+zstd.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+pretty_env_logger.workspace = true
+env_logger.workspace = true
