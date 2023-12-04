@@ -5,6 +5,7 @@ use indicatif::MultiProgress;
 use lazy_static::lazy_static;
 use libraries::{ensure_library_exists, LibraryDownloadError};
 use log::info;
+use prepare::{BeforeError, MountsError, WinePrefixError, WinetricksError};
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use run::CommandRunner;
 use runtime::get_runtime;
@@ -31,13 +32,13 @@ pub enum LaunchError {
     #[error("Library installation error. {0}")]
     LibraryInstall(#[from] dll::InstallError),
     #[error("Unable to set up wine prefix. {0}")]
-    Prefix(io::Error),
+    Prefix(#[from] WinePrefixError),
     #[error("Winetricks error. {0}")]
-    Tricks(io::Error),
+    Tricks(#[from] WinetricksError),
     #[error("Unable to symlink mounts. {0}")]
-    Mounts(io::Error),
+    Mounts(#[from] MountsError),
     #[error("Before command error. {0}")]
-    Before(io::Error),
+    Before(#[from] BeforeError),
     #[error("IO error. {0}")]
     Io(#[from] io::Error),
 }
@@ -66,15 +67,12 @@ pub fn launch(paths: Paths, config: Config) -> Result<(), LaunchError> {
 
     let runner = CommandRunner::new(runtime, config.env, paths.prefixes, &config.prefix)?;
 
-    runner.prepare_wine_prefix().map_err(LaunchError::Prefix)?;
-    runner
-        .winetricks(&config.winetricks)
-        .map_err(LaunchError::Tricks)?;
-    runner.mounts(&config.mounts).map_err(LaunchError::Mounts)?;
+    runner.prepare_wine_prefix()?;
+    runner.winetricks(&config.winetricks)?;
+    runner.mounts(&config.mounts)?;
     runner.install_libraries(&libraries)?;
-    runner.before(&config.before).map_err(LaunchError::Before)?;
+    runner.before(&config.before)?;
 
-    // Run before-scripts
     runner.run("wineserver", &["--wait"])?;
     // Run game
     runner.run("wineserver", &["--wait"])?;

@@ -79,7 +79,7 @@ impl Arch {
 
 #[derive(Debug, Error)]
 pub enum CopyError {
-    #[error("Unable to copy dll: {0}")]
+    #[error("Unable to copy dll. {0}")]
     Copy(io::Error),
     #[error("Invalid file name: {0}")]
     FileName(PathBuf),
@@ -90,13 +90,29 @@ pub enum CopyError {
 pub struct OverrideError(#[from] io::Error);
 
 #[derive(Debug, Error)]
-pub enum InstallError {
-    #[error("Copy error: {0}")]
+pub enum InstallLibraryError {
+    #[error("Copy error. {0}")]
     Copy(#[from] CopyError),
-    #[error("Override error: {0}")]
+    #[error("Override error. {0}")]
     Override(#[from] OverrideError),
-    #[error("Unable to update state file: {0}")]
+}
+
+#[derive(Debug, Error)]
+pub enum InstallError {
+    #[error("Install {0} library error. {0}")]
+    Library(&'static str, InstallLibraryError),
+    #[error("Unable to update state file. {0}")]
     StateWrite(io::Error),
+}
+
+trait WithContext<Target, Context> {
+    fn context(self, context: Context) -> Target;
+}
+
+impl<T> WithContext<Result<T, InstallError>, &'static str> for Result<T, InstallLibraryError> {
+    fn context(self, context: &'static str) -> Result<T, InstallError> {
+        self.map_err(|e| InstallError::Library(context, e))
+    }
 }
 
 impl CommandRunner {
@@ -147,7 +163,7 @@ impl CommandRunner {
         path: &Path,
         arch: Arch,
         dlls: &[&'a str],
-    ) -> Result<(), InstallError> {
+    ) -> Result<(), InstallLibraryError> {
         for dll in dlls {
             self.copy_dll(path.join(dll).with_extension("dll"), arch)?;
             if !overrides.contains(dll) {
@@ -168,26 +184,29 @@ impl CommandRunner {
         let mut overrides = Overrides::new(overrides.lines().collect());
 
         for (library, path) in libraries {
-            info!(
-                "Copying library {:?} dlls from {:?}...",
-                library.name(),
-                path
-            );
+            let name = library.name();
+            info!("Copying library {name} dlls from {:?}...", path.display());
 
             match library {
                 Library::Dxvk | Library::DxvkGplAsync => {
                     let dlls = &["d3d9", "d3d10core", "d3d11", "dxgi"];
-                    self.install_dlls(&mut overrides, &path.join("x64"), Arch::X64, dlls)?;
-                    self.install_dlls(&mut overrides, &path.join("x32"), Arch::X86, dlls)?;
+                    self.install_dlls(&mut overrides, &path.join("x64"), Arch::X64, dlls)
+                        .context(name)?;
+                    self.install_dlls(&mut overrides, &path.join("x32"), Arch::X86, dlls)
+                        .context(name)?;
                 }
                 Library::DxvkNvapi => {
-                    self.install_dlls(&mut overrides, &path.join("x64"), Arch::X64, &["nvapi64"])?;
-                    self.install_dlls(&mut overrides, &path.join("x32"), Arch::X86, &["nvapi"])?;
+                    self.install_dlls(&mut overrides, &path.join("x64"), Arch::X64, &["nvapi64"])
+                        .context(name)?;
+                    self.install_dlls(&mut overrides, &path.join("x32"), Arch::X86, &["nvapi"])
+                        .context(name)?;
                 }
                 Library::Vkd3dProton => {
                     let dlls = &["d3d12", "d3d12core"];
-                    self.install_dlls(&mut overrides, &path.join("x64"), Arch::X64, dlls)?;
-                    self.install_dlls(&mut overrides, &path.join("x86"), Arch::X86, dlls)?;
+                    self.install_dlls(&mut overrides, &path.join("x64"), Arch::X64, dlls)
+                        .context(name)?;
+                    self.install_dlls(&mut overrides, &path.join("x86"), Arch::X86, dlls)
+                        .context(name)?;
                 }
             }
         }
@@ -199,12 +218,16 @@ impl CommandRunner {
 
             let dll = path.join("nvngx.dll");
             if dll.exists() {
-                self.copy_dll(&dll, Arch::X64)?;
+                self.copy_dll(&dll, Arch::X64)
+                    .map_err(InstallLibraryError::from)
+                    .context("nvngx")?;
             }
 
             let dll = path.join("_nvngx.dll");
             if dll.exists() {
-                self.copy_dll(&dll, Arch::X64)?;
+                self.copy_dll(&dll, Arch::X64)
+                    .map_err(InstallLibraryError::from)
+                    .context("nvngx")?;
             }
         }
 
