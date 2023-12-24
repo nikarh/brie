@@ -1,0 +1,41 @@
+[package]
+name = "briectl"
+version = "0.1.0"
+edition = "2021"
+
+description = "A tool for managing units used by brie command line tool."
+repository = "https://github.com/nikarh/brie"
+license = "MIT OR Apache-2.0"
+
+authors = ["Nikolay Arhipov <n@arhipov.net>"]
+keywords = ["brie", "wine", "gaming"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+brie_cfg = { path = "../brie_cfg" }
+brie_download = { path = "../brie_download" }
+
+clap.workspace = true
+ureq.workspace = true
+url.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace = true
+image.workspace = true
+png.workspace = true
+rayon.workspace = true
+log.workspace = true
+indicatif.workspace = true
+xdg.workspace = true
+shellexpand.workspace = true
+
+simple_logger.workspace = true
+indicatif-log-bridge.workspace = true
+
+[dev-dependencies]
+indicatif-log-bridge.workspace = true
+simple_logger.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,30 @@
+[package]
+name = "brie"
+version = "0.1.0"
+edition = "2021"
+
+description = "A tool for running windows games on Linux via wine."
+repository = "https://github.com/nikarh/brie"
+license = "MIT OR Apache-2.0"
+
+authors = ["Nikolay Arhipov <n@arhipov.net>"]
+keywords = ["brie", "wine", "gaming"]
+categories = ["command-line-utilities"]
+
+[dependencies]
+brie_cfg = { path = "../brie_cfg" }
+brie_lib = { path = "../brie_lib" }
+
+serde_yaml.workspace = true
+xdg.workspace = true
+thiserror.workspace = true
+
+log.workspace = true
+simple_logger.workspace = true
+indicatif-log-bridge.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true
