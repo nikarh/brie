@@ -1,22 +1,25 @@
-use std::{env::VarError, io, path::Path};
+use std::{
+    collections::HashMap,
+    env::VarError,
+    io,
+    path::{Path, PathBuf},
+};
 
 use brie_cfg::Brie;
 use log::{debug, info};
 use shellexpand::LookupError;
 
-use crate::assets;
+use crate::assets::{ImageKind, Images};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("Assets error. {0}")]
-    Assets(#[from] assets::Error),
     #[error("IO error. {0}")]
     Io(#[from] io::Error),
     #[error("Path error. {0}")]
     Expand(#[from] LookupError<VarError>),
 }
 
-pub fn update(cache_dir: &Path, config: &Brie) -> Result<(), Error> {
+pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
     let Some(desktop_path) = config.paths.desktop.as_ref() else {
         info!("Desktop file path not provided, skipping generation");
         return Ok(());
@@ -39,17 +42,14 @@ pub fn update(cache_dir: &Path, config: &Brie) -> Result<(), Error> {
         }
     });
 
-    // Download assets
-    let images = assets::download_all(cache_dir, config)?;
-
     // Recreate files for all units
     for (key, unit) in config.units.iter().filter(|(_, u)| u.generate.desktop) {
         let path = desktop_path.join(format!("brie-{key}.desktop"));
 
         let icon = images
             .get(key)
-            .and_then(|p| p.icon.as_deref())
-            .unwrap_or_else(|| Path::new(""));
+            .and_then(|p| p.get(ImageKind::Icon))
+            .map_or_else(|| Path::new(""), PathBuf::as_path);
 
         let name = unit.name.as_ref().unwrap_or(key);
         let desktop = format!(

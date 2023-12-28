@@ -62,13 +62,19 @@ fn autocomplete(token: &str, name: &str) -> Result<Option<u32>, Error> {
 pub enum ImageKind {
     Grid,
     Icon,
+    Hero,
 }
 
 impl ImageKind {
+    fn all() -> [ImageKind; 3] {
+        [ImageKind::Grid, ImageKind::Icon, ImageKind::Hero]
+    }
+
     fn path(self) -> &'static str {
         match self {
             ImageKind::Grid => "grids",
             ImageKind::Icon => "icons",
+            ImageKind::Hero => "heroes",
         }
     }
 }
@@ -78,6 +84,7 @@ impl std::fmt::Display for ImageKind {
         f.write_str(match self {
             ImageKind::Grid => "grid",
             ImageKind::Icon => "icon",
+            ImageKind::Hero => "hero",
         })
     }
 }
@@ -91,6 +98,7 @@ impl ImageKind {
                 .or(images.first())
                 .map(|img| img.url.as_str()),
             ImageKind::Icon => images.first().map(|img| img.thumb.as_str()),
+            ImageKind::Hero => images.first().map(|img| img.thumb.as_str()),
         }
     }
 }
@@ -191,7 +199,6 @@ fn ensure_steamgriddb_ids(
         .unwrap_or_default();
 
     info!("Finding missing steamgriddb ids");
-    debug!("Cached ids: {cached_ids:?}");
 
     // Find ids in steamgriddb for units missing it. Ideally it should append it to `brie.yaml`, but
     // that might be complicated, considering formatting and comments should remain intact.
@@ -248,7 +255,8 @@ fn ensure_images_exist(
     let ids: HashSet<_> = id_map.values().copied().collect();
     let paths: HashMap<_, _> = ids
         .par_iter()
-        .flat_map(|id| [ImageKind::Grid, ImageKind::Icon].map(|kind| (*id, kind)))
+        .cloned()
+        .flat_map(|id| ImageKind::all().map(|kind| (id, kind)))
         .into_par_iter()
         .filter_map(|(id, kind)| {
             let path = cache_dir.join("images").join(format!("{id}-{kind}.png"));
@@ -278,19 +286,24 @@ fn ensure_images_exist(
         .map(|(key, id)| {
             (
                 key,
-                Images {
-                    icon: paths.get(&(id, ImageKind::Icon)).cloned(),
-                    grid: paths.get(&(id, ImageKind::Grid)).cloned(),
-                },
+                Images(
+                    ImageKind::all()
+                        .iter()
+                        .filter_map(|&kind| paths.get(&(id, kind)).map(|p| (kind, p.clone())))
+                        .collect(),
+                ),
             )
         })
         .collect()
 }
 
 #[derive(Default, Clone)]
-pub struct Images {
-    pub icon: Option<PathBuf>,
-    pub grid: Option<PathBuf>,
+pub struct Images(HashMap<ImageKind, PathBuf>);
+
+impl Images {
+    pub fn get(&self, kind: ImageKind) -> Option<&PathBuf> {
+        self.0.get(&kind)
+    }
 }
 
 pub fn download_all(cache_dir: &Path, config: &Brie) -> Result<HashMap<String, Images>, Error> {
@@ -299,8 +312,7 @@ pub fn download_all(cache_dir: &Path, config: &Brie) -> Result<HashMap<String, I
         return Ok(HashMap::default());
     };
 
-    info!("Downloading banners from steamgriddb");
-
+    info!("Downloading banners and icons from steamgriddb");
     let _ = std::fs::create_dir_all(cache_dir);
     let id_map = ensure_steamgriddb_ids(token, cache_dir, config)?;
     Ok(ensure_images_exist(token, cache_dir, id_map))

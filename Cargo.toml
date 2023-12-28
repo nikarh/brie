@@ -34,6 +34,8 @@ pretty_assertions = "1.4"
 image = "0.24"
 png = "0.17"
 shellexpand = "3.1"
+inotify = "0.10"
+steam_shortcuts_util = "1.1"
 
 [profile.release]
 codegen-units = 1

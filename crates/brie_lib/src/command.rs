@@ -49,8 +49,8 @@ impl Runner {
             "winemenubuilder.exe=".to_owned(),
         );
 
-        for (library, path) in libraries {
-            mut_env(*library, path, &mut envs);
+        for (&library, path) in libraries {
+            mut_env(library, path, &mut envs);
         }
 
         let prefix = paths.prefixes.absolutize()?.join(prefix);

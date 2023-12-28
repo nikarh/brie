@@ -1,6 +1,6 @@
 [package]
 name = "briectl"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 description = "A tool for managing units used by brie command line tool."
@@ -29,6 +29,8 @@ log.workspace = true
 indicatif.workspace = true
 xdg.workspace = true
 shellexpand.workspace = true
+inotify.workspace = true
+steam_shortcuts_util.workspace = true
 
 simple_logger.workspace = true
 indicatif-log-bridge.workspace = true

@@ -5,12 +5,10 @@ use brie_lib::{Paths, Unit, MP};
 fn main() {
     let log = simple_logger::SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
-        .with_module_level("brie", log::LevelFilter::Trace)
-        .env();
-
-    indicatif_log_bridge::LogWrapper::new(MP.clone(), log)
-        .try_init()
-        .unwrap();
+        .with_module_level("brie", log::LevelFilter::Trace);
+    let max_level = log.max_level();
+    let _ = indicatif_log_bridge::LogWrapper::new(MP.clone(), log).try_init();
+    log::set_max_level(max_level);
 
     if let Err(e) = launch() {
         eprintln!("Error: {e}");

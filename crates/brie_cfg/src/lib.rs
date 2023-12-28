@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, io, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Brie {
     pub steamgriddb_token: Option<String>,
     #[serde(default)]
@@ -10,11 +10,11 @@ pub struct Brie {
     pub units: BTreeMap<String, Unit>,
 }
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Paths {
+    pub steam_config: Option<String>,
     pub sunshine: Option<String>,
     pub desktop: Option<String>,
-    pub shell: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug)]
@@ -36,7 +36,7 @@ pub enum ReleaseVersion {
     Tag(String),
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Unit {
     pub name: Option<String>,
     #[serde(default)]
@@ -64,7 +64,7 @@ pub struct Unit {
     pub libraries: BTreeMap<Library, ReleaseVersion>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case", tag = "kind")]
 pub enum Runtime {
     System { path: Option<PathBuf> },
@@ -77,14 +77,14 @@ impl Default for Runtime {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Generate {
     #[serde(default)]
     pub sunshine: bool,
     #[serde(default)]
     pub desktop: bool,
     #[serde(default)]
-    pub shell: bool,
+    pub steam_shortcut: bool,
 }
 
 #[derive(thiserror::Error, Debug)]

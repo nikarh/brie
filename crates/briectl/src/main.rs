@@ -1,11 +1,14 @@
-use std::{io, process::Command};
+use std::{collections::HashMap, io, process::Command};
 
+use brie_cfg::Brie;
 use brie_download::MP;
 use clap::{Parser, Subcommand};
-use log::info;
+use inotify::{Inotify, WatchMask};
+use log::{error, info};
 
 mod assets;
 mod desktop;
+mod steam;
 mod sunshine;
 
 #[derive(Parser)]
@@ -39,6 +42,10 @@ enum Generate {
     Sunshine,
     /// Generate .desktop files
     Desktop,
+    /// Add unit to steam as non-steam titles
+    Steam,
+    /// Update sunshine configuration and generate .desktop files
+    All,
 }
 
 #[derive(Subcommand)]
@@ -50,12 +57,10 @@ enum Config {
 fn main() {
     let log = simple_logger::SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
-        .with_module_level("brie", log::LevelFilter::Trace)
-        .env();
-
-    indicatif_log_bridge::LogWrapper::new(MP.clone(), log)
-        .try_init()
-        .unwrap();
+        .with_module_level("briectl", log::LevelFilter::Trace);
+    let max_level = log.max_level();
+    let _ = indicatif_log_bridge::LogWrapper::new(MP.clone(), log).try_init();
+    log::set_max_level(max_level);
 
     if let Err(e) = run() {
         eprintln!("Error: {e}");
@@ -71,10 +76,12 @@ enum Error {
     Config(#[from] brie_cfg::Error),
     #[error("Asset error. {0}")]
     Assets(#[from] assets::Error),
-    #[error("Sunshine config error. {0}")]
+    #[error("Unable to update sunshine config. {0}")]
     Sunshine(#[from] sunshine::Error),
-    #[error("Desktop file error. {0}")]
+    #[error("Unable to create .desktop files. {0}")]
     Desktop(#[from] desktop::Error),
+    #[error("Unable to add units to steam. {0}")]
+    Steam(#[from] steam::Error),
     #[error("IO error. {0}")]
     Io(#[from] io::Error),
 }
@@ -101,20 +108,92 @@ fn run() -> Result<(), Error> {
             let config = brie_cfg::read(config_file)?;
             assets::download_all(&cache_dir, &config)?;
         }
-        Commands::Generate { command } => match command {
-            Generate::Sunshine => {
-                info!("Generating sunshine configuration");
-                let config = brie_cfg::read(config_file)?;
-                sunshine::update(&cache_dir, &config)?;
+        Commands::Generate { command } => {
+            let config = brie_cfg::read(config_file)?;
+            let images = assets::download_all(&cache_dir, &config)?;
+            match command {
+                Generate::Sunshine => {
+                    info!("Generating sunshine configuration");
+                    sunshine::update(&images, &config)?;
+                }
+                Generate::Desktop => {
+                    info!("Generating .desktop files");
+                    desktop::update(&images, &config)?;
+                }
+                Generate::Steam => {
+                    info!("Adding units to steam");
+                    steam::update(&images, &config)?;
+                }
+                Generate::All => {
+                    update_app(&images, &config)?;
+                }
             }
-            Generate::Desktop => {
-                info!("Generating .desktop files");
-                let config = brie_cfg::read(config_file)?;
-                desktop::update(&cache_dir, &config)?;
+        }
+        Commands::Watch => {
+            info!(
+                "Watching config file `{}` for changes",
+                config_file.display()
+            );
+            let mut inotify = Inotify::init()?;
+
+            let process = |config: &Brie| {
+                let images = assets::download_all(&cache_dir, config)?;
+                update_app(&images, config)?;
+                Ok::<_, Error>(())
+            };
+
+            let mut config = brie_cfg::read(config_file.clone())?;
+            let mut buffer = [0u8; 4096];
+            let mut update = true;
+
+            loop {
+                if update {
+                    info!("Processing config");
+                    if let Err(err) = process(&config) {
+                        error!("Watch error: {err}");
+                    }
+
+                    update = false;
+                }
+
+                info!("Waiting for events via inotify");
+                inotify.watches().add(
+                    &config_file,
+                    WatchMask::MODIFY
+                        | WatchMask::CREATE
+                        | WatchMask::DELETE_SELF
+                        | WatchMask::MOVE
+                        | WatchMask::CLOSE_WRITE
+                        | WatchMask::ONESHOT,
+                )?;
+                let mut events = inotify.read_events_blocking(&mut buffer)?;
+                let Some(event) = events.next() else {
+                    continue;
+                };
+
+                info!("Handling event: {:?}", event);
+                let new_config = brie_cfg::read(config_file.clone())?;
+                if new_config == config {
+                    info!("Config did not change");
+                    continue;
+                }
+
+                config = new_config;
+                update = true;
             }
-        },
-        Commands::Watch => todo!(),
+        }
     };
+
+    Ok(())
+}
+
+fn update_app(images: &HashMap<String, assets::Images>, config: &Brie) -> Result<(), Error> {
+    info!("Generating sunshine configuration");
+    sunshine::update(images, config)?;
+    info!("Generating .desktop files");
+    desktop::update(images, config)?;
+    info!("Adding units to steam");
+    steam::update(images, config)?;
 
     Ok(())
 }

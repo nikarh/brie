@@ -1,6 +1,6 @@
 [package]
 name = "brie"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 
 description = "A tool for running windows games on Linux via wine."

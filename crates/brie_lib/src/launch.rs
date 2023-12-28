@@ -104,9 +104,9 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
         state.wine = Some(std::time::SystemTime::now());
     }
 
-    for (l, s) in &libraries {
+    for (&l, s) in &libraries {
         if s.updated {
-            state.libraries.insert(*l, std::time::SystemTime::now());
+            state.libraries.insert(l, std::time::SystemTime::now());
         }
     }
 
