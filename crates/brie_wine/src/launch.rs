@@ -1,6 +1,7 @@
-use std::{borrow::Cow, collections::BTreeMap, env::VarError, fs, io, path::Path};
+use std::{borrow::Cow, env::VarError, fs, io, path::Path};
 
 use fslock::LockFile;
+use indexmap::IndexMap;
 use log::info;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
@@ -89,7 +90,7 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
                     .map(|path| (*l, path))
                     .context(l.name())
                 })
-                .collect::<Result<BTreeMap<_, _>, _>>()
+                .collect::<Result<IndexMap<_, _>, _>>()
         }
     );
 
@@ -115,7 +116,7 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
     let libraries = libraries
         .into_iter()
         .map(|(l, path)| (l, path.path))
-        .collect::<BTreeMap<_, _>>();
+        .collect::<IndexMap<_, _>>();
 
     let runner =
         Runner::new(paths, wine.path, unit.env, &unit.prefix, &libraries).map_err(Error::Runner)?;
@@ -139,7 +140,11 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
         );
 
         info!("Running: {:?} in {}", unit.command, cd.display());
-        let mut command = runner.command("wine", &unit.command);
+        let mut command = unit.wrapper;
+        command.push("wine".into());
+        command.extend(unit.command);
+
+        let mut command = runner.command(&command[0], &command[1..]);
         command.current_dir(cd);
         command.status().map_err(Error::Run)?;
     }
@@ -152,9 +157,10 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeMap, path::Path};
+    use std::path::Path;
 
     use brie_cfg::{Library, ReleaseVersion, Runtime};
+    use indexmap::IndexMap;
     use indicatif_log_bridge::LogWrapper;
 
     use crate::{Paths, Unit, MP};
@@ -181,7 +187,7 @@ mod tests {
                     (Library::Vkd3dProton, ReleaseVersion::Latest),
                 ]
                 .into(),
-                env: BTreeMap::default(),
+                env: IndexMap::default(),
                 prefix: "TEST_PREFIX".into(),
 
                 cd: None,
@@ -189,6 +195,7 @@ mod tests {
                 mounts: [('r', "/etc".into())].into(),
                 before: vec![],
                 winetricks: vec![],
+                wrapper: vec![],
             },
         )
         .unwrap();

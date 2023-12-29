@@ -3,7 +3,7 @@ name = "brie_cfg"
 version = "0.0.1"
 edition = "2021"
 
-description = "A library containing structures for config deserialization."
+description = "A library containing structures for brie.yaml deserialization."
 repository = "https://github.com/nikarh/brie"
 license = "MIT OR Apache-2.0"
 
@@ -13,6 +13,8 @@ keywords = ["brie", "wine", "gaming"]
 [dependencies]
 serde.workspace = true
 serde_yaml.workspace = true
+serde_with.workspace = true
+indexmap.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

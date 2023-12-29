@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
@@ -8,6 +8,7 @@ use std::{
 };
 
 use brie_cfg::Library;
+use indexmap::IndexMap;
 use log::{debug, info};
 use thiserror::Error;
 
@@ -156,6 +157,13 @@ impl Runner {
         let dest = dest.join(file_name);
 
         debug!("Copying {} to {}", source.display(), dest.display());
+
+        // Broken symlinks return false on `.exists()` check, so it is skipped here.
+        if dest.is_symlink() {
+            debug!("Destination is a symlink, removing it");
+            let _ = fs::remove_file(&dest);
+        }
+
         fs::copy(source, dest).map_err(CopyError::Copy)?;
 
         Ok(())
@@ -207,7 +215,7 @@ impl Runner {
         Ok(())
     }
 
-    pub fn install_libraries(&self, libraries: &BTreeMap<Library, PathBuf>) -> Result<(), Error> {
+    pub fn install_libraries(&self, libraries: &IndexMap<Library, PathBuf>) -> Result<(), Error> {
         let overrides_file = self.wine_prefix().join(".overrides");
         let overrides = fs::read_to_string(&overrides_file).unwrap_or_default();
         let mut overrides = Overrides::new(&overrides);
@@ -284,7 +292,7 @@ impl Runner {
     }
 }
 
-pub fn mut_env(library: Library, path: &Path, env: &mut BTreeMap<String, String>) {
+pub fn mut_env(library: Library, path: &Path, env: &mut IndexMap<String, String>) {
     #[allow(clippy::single_match)]
     match library {
         Library::NvidiaLibs => {

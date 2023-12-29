@@ -1,6 +1,12 @@
-use std::{collections::BTreeMap, env::args};
+use std::{
+    env::args,
+    process::{Command, Stdio},
+};
 
-use brie_lib::{Paths, Unit, MP};
+use brie_cfg::NativeUnit;
+use brie_wine::{Paths, Unit, MP};
+use indexmap::IndexMap;
+use log::debug;
 
 fn main() {
     let log = simple_logger::SimpleLogger::new()
@@ -20,7 +26,7 @@ fn main() {
 struct Units(Vec<String>);
 
 impl Units {
-    fn new(units: &BTreeMap<String, brie_cfg::Unit>) -> Self {
+    fn new(units: &IndexMap<String, brie_cfg::Unit>) -> Self {
         Self(units.keys().cloned().collect())
     }
 }
@@ -40,12 +46,16 @@ enum Error {
     Xdg(#[from] xdg::BaseDirectoriesError),
     #[error("Config error. {0}")]
     Config(#[from] brie_cfg::Error),
-    #[error("Run error. {0}")]
-    Brie(#[from] brie_lib::Error),
+    #[error("Wine run error. {0}")]
+    Wine(#[from] brie_wine::Error),
     #[error("Unit not provided as an argument. Available units:\n{0}")]
     NoUnitProvided(Units),
     #[error("Unit `{0}` not found. Available units:\n{1}")]
     NotFound(String, Units),
+    #[error("Invalid unit - empty command field.")]
+    EmptyCommand,
+    #[error("Error running native unit. {0}")]
+    Native(#[source] std::io::Error),
 }
 
 fn launch() -> Result<(), Error> {
@@ -65,24 +75,52 @@ fn launch() -> Result<(), Error> {
         .remove(&name)
         .ok_or_else(|| Error::NotFound(name.clone(), Units::new(&cfg.units)))?;
 
-    unit.command.extend(args);
+    unit.common_mut().command.extend(args);
 
-    let paths = Paths::new(&data_home);
-    let cfg = Unit {
-        runtime: unit.runtime,
-        libraries: unit.libraries,
-        env: unit.env,
-        prefix: unit
-            .prefix
-            .unwrap_or_else(|| sanitize_directory_name(&unit.name.unwrap_or(name))),
-        mounts: unit.mounts,
-        before: unit.before,
-        winetricks: unit.winetricks,
-        cd: unit.cd,
-        command: unit.command,
+    match unit {
+        brie_cfg::Unit::Native(NativeUnit { common: unit }) => {
+            if unit.command.is_empty() {
+                return Err(Error::EmptyCommand);
+            }
+
+            let mut args = unit.wrapper;
+            args.extend(unit.command);
+
+            let mut command = Command::new(&args[0]);
+            command
+                .args(&args[1..])
+                .stdin(Stdio::null())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .envs(&unit.env);
+
+            if let Some(cd) = unit.cd {
+                command.current_dir(cd);
+            }
+
+            debug!("Running command: {:?}", args);
+            command.status().map_err(Error::Native)?;
+        }
+        brie_cfg::Unit::Wine(unit) => {
+            let paths = Paths::new(&data_home);
+            let cfg = Unit {
+                runtime: unit.runtime,
+                libraries: unit.libraries,
+                env: unit.common.env,
+                prefix: unit
+                    .prefix
+                    .unwrap_or_else(|| sanitize_directory_name(&unit.common.name.unwrap_or(name))),
+                mounts: unit.mounts,
+                before: unit.before,
+                winetricks: unit.winetricks,
+                cd: unit.common.cd,
+                command: unit.common.command,
+                wrapper: unit.common.wrapper,
+            };
+
+            brie_wine::launch(&paths, cfg)?;
+        }
     };
-
-    brie_lib::launch(&paths, cfg)?;
 
     Ok(())
 }

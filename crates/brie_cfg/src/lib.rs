@@ -1,13 +1,15 @@
-use std::{collections::BTreeMap, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use serde_with::{formats::PreferOne, serde_as, OneOrMany};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Brie {
     pub steamgriddb_token: Option<String>,
     #[serde(default)]
     pub paths: Paths,
-    pub units: BTreeMap<String, Unit>,
+    pub units: IndexMap<String, Unit>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -36,32 +38,73 @@ pub enum ReleaseVersion {
     Tag(String),
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
+pub enum Unit {
+    Wine(WineUnit),
+    Native(NativeUnit),
+}
+
+impl Unit {
+    #[must_use]
+    pub fn common(&self) -> &UnitCommon {
+        match self {
+            Self::Native(unit) => &unit.common,
+            Self::Wine(unit) => &unit.common,
+        }
+    }
+
+    #[must_use]
+    pub fn common_mut(&mut self) -> &mut UnitCommon {
+        match self {
+            Self::Native(unit) => &mut unit.common,
+            Self::Wine(unit) => &mut unit.common,
+        }
+    }
+}
+
+#[serde_as]
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Unit {
+pub struct UnitCommon {
     pub name: Option<String>,
-    #[serde(default)]
-    pub prefix: Option<String>,
-    #[serde(default)]
     pub steamgriddb_id: Option<u32>,
-    #[serde(default)]
     pub cd: Option<String>,
+    #[serde_as(deserialize_as = "OneOrMany<_, PreferOne>")]
     pub command: Vec<String>,
     #[serde(default)]
-    pub winetricks: Vec<String>,
-    #[serde(default)]
-    pub mounts: BTreeMap<char, String>,
-    #[serde(default)]
-    pub before: Vec<Vec<String>>,
+    pub env: IndexMap<String, String>,
     #[serde(default)]
     pub generate: Generate,
     #[serde(default)]
-    pub env: BTreeMap<String, String>,
-    #[serde(default)]
+    #[serde_as(deserialize_as = "OneOrMany<_, PreferOne>")]
     pub wrapper: Vec<String>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WineUnit {
+    #[serde(flatten)]
+    pub common: UnitCommon,
+
+    #[serde(default)]
+    pub prefix: Option<String>,
+    #[serde(default)]
+    pub winetricks: Vec<String>,
+    #[serde(default)]
+    pub mounts: IndexMap<char, String>,
+    #[serde(default)]
+    pub before: Vec<Vec<String>>,
     #[serde(default)]
     pub runtime: Runtime,
     #[serde(default)]
-    pub libraries: BTreeMap<Library, ReleaseVersion>,
+    pub libraries: IndexMap<Library, ReleaseVersion>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind")]
+pub struct NativeUnit {
+    #[serde(flatten)]
+    pub common: UnitCommon,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -104,7 +147,13 @@ pub fn read(path: PathBuf) -> Result<Brie, Error> {
 
     let cfg = std::fs::read(&path)?;
     let mut cfg: serde_yaml::Value = serde_yaml::from_slice(&cfg)?;
+
+    // FIXME: find a way to apply merges recursively
+    // https://github.com/dtolnay/serde-yaml/issues/362
     cfg.apply_merge()?;
+    cfg.apply_merge()?;
+    cfg.apply_merge()?;
+
     let cfg: Brie = serde_yaml::from_value(cfg)?;
 
     Ok(cfg)

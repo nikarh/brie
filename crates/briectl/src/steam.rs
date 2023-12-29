@@ -8,7 +8,9 @@ use std::{
 use brie_cfg::Brie;
 use log::{debug, info};
 use shellexpand::LookupError;
-use steam_shortcuts_util::{parse_shortcuts, shortcuts_to_bytes, Shortcut};
+use steam_shortcuts_util::{
+    calculate_app_id_for_shortcut, parse_shortcuts, shortcuts_to_bytes, Shortcut,
+};
 
 use crate::assets::{ImageKind, Images};
 
@@ -22,7 +24,7 @@ pub enum Error {
     Expand(#[from] LookupError<VarError>),
 }
 
-pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
+pub fn update(exe: &str, images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
     let Some(steam_config) = config.paths.steam_config.as_ref() else {
         info!("Steam config path not provided, skipping shortcut generation");
         return Ok(());
@@ -37,6 +39,7 @@ pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Err
     let units = config
         .units
         .iter()
+        .map(|(k, v)| (k, v.common()))
         .filter(|(_, unit)| unit.generate.steam_shortcut)
         .map(|(k, u)| (k.as_str(), u))
         .collect::<HashMap<_, _>>();
@@ -101,7 +104,9 @@ pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Err
     for (shortcut, unit) in update_iter {
         info!("Updating shortcut for `{}`", shortcut.launch_options);
         updated_keys.insert(shortcut.launch_options);
+        shortcut.exe = exe;
         shortcut.app_name = unit.name.as_deref().unwrap_or(shortcut.launch_options);
+        shortcut.app_id = calculate_app_id_for_shortcut(shortcut);
         app_ids.insert(shortcut.launch_options, shortcut.app_id);
     }
 
@@ -111,7 +116,7 @@ pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Err
     for (key, unit) in insert_iter {
         info!("Adding shortcut for `{key}`");
         let name = unit.name.as_deref().unwrap_or(key);
-        let mut shortcut = Shortcut::new("0", name, "brie", "", "", "", key);
+        let mut shortcut = Shortcut::new("0", name, exe, "", "", "", key);
         shortcut.tags = vec!["brie"];
         app_ids.insert(key, shortcut.app_id);
         shortcuts.push(shortcut);
@@ -125,23 +130,29 @@ pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Err
             continue;
         };
 
-        if let Some(image) = images.get(ImageKind::Grid) {
-            let name = format!("{app_id}p.png");
-            let path = grid_path.join(&name);
-            debug!("Copying image {image:?} to {path:?}");
-            let _ = std::fs::copy(image, path)?;
-        }
-
-        if let Some(image) = images.get(ImageKind::Hero) {
-            let name = format!("{app_id}_hero.png");
-            let path = grid_path.join(&name);
-            debug!("Copying image {image:?} to {path:?}");
-            let _ = std::fs::copy(image, path)?;
-        }
+        copy_images(&grid_path, app_id, images)?;
     }
 
     let shortcuts = shortcuts_to_bytes(&shortcuts);
     std::fs::write(shortcuts_path, shortcuts).unwrap_or_default();
+
+    Ok(())
+}
+
+fn copy_images(grid_path: &Path, app_id: u32, images: &Images) -> Result<(), Error> {
+    if let Some(image) = images.get(ImageKind::Grid) {
+        let name = format!("{app_id}p.png");
+        let path = grid_path.join(name);
+        debug!("Copying image {image:?} to {path:?}");
+        let _ = std::fs::copy(image, path)?;
+    }
+
+    if let Some(image) = images.get(ImageKind::Hero) {
+        let name = format!("{app_id}_hero.png");
+        let path = grid_path.join(name);
+        debug!("Copying image {image:?} to {path:?}");
+        let _ = std::fs::copy(image, path)?;
+    }
 
     Ok(())
 }

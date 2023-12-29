@@ -1,5 +1,5 @@
 [package]
-name = "brie_lib"
+name = "brie_wine"
 version = "0.0.1"
 edition = "2021"
 
@@ -28,6 +28,7 @@ shellexpand.workspace = true
 lazy_static.workspace = true
 fslock.workspace = true
 uuid.workspace = true
+indexmap.workspace = true
 
 flate2.workspace = true
 xz2.workspace = true

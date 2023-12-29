@@ -1,11 +1,12 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::HashSet,
     fs::{self},
     io::{self, Write},
     os::unix,
     path::PathBuf,
 };
 
+use indexmap::IndexMap;
 use log::{debug, info};
 use thiserror::Error;
 
@@ -118,7 +119,7 @@ impl Runner {
         Ok(())
     }
 
-    pub fn mounts(&self, mounts: &BTreeMap<char, String>) -> Result<(), MountsError> {
+    pub fn mounts(&self, mounts: &IndexMap<char, String>) -> Result<(), MountsError> {
         info!("Checking drive mounts");
         // Iterate over mounts, check if there exists a symlink, if target is different, remove it,
         // if target is not a symlink, return error, then create a new link if necessary

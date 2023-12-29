@@ -19,7 +19,7 @@ pub enum Error {
     Expand(#[from] LookupError<VarError>),
 }
 
-pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
+pub fn update(exe: &str, images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
     let Some(desktop_path) = config.paths.desktop.as_ref() else {
         info!("Desktop file path not provided, skipping generation");
         return Ok(());
@@ -43,7 +43,12 @@ pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Err
     });
 
     // Recreate files for all units
-    for (key, unit) in config.units.iter().filter(|(_, u)| u.generate.desktop) {
+    for (key, unit) in config
+        .units
+        .iter()
+        .map(|(k, v)| (k, v.common()))
+        .filter(|(_, u)| u.generate.desktop)
+    {
         let path = desktop_path.join(format!("brie-{key}.desktop"));
 
         let icon = images
@@ -57,7 +62,7 @@ pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Err
             Type=Application\n\
             Version=1.0\n\
             Name={name}\n\
-            Exec=brie {key}\n\
+            Exec=\"{exe}\" {key}\n\
             Icon={icon}\n\
             Terminal=false\n\
             Categories=Games;\n",

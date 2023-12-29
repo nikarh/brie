@@ -8,6 +8,7 @@ use log::{error, info};
 
 mod assets;
 mod desktop;
+mod exe;
 mod steam;
 mod sunshine;
 
@@ -89,8 +90,9 @@ enum Error {
 fn run() -> Result<(), Error> {
     let cli = Cli::parse();
     let xdg = xdg::BaseDirectories::with_prefix("brie")?;
-    let cache_dir = xdg.get_cache_home();
+    let cache_dir = xdg.get_data_home();
     let config_file = xdg.get_config_file("brie.yaml");
+    let exe = exe::path();
 
     match cli.command {
         Commands::Config {
@@ -114,18 +116,18 @@ fn run() -> Result<(), Error> {
             match command {
                 Generate::Sunshine => {
                     info!("Generating sunshine configuration");
-                    sunshine::update(&images, &config)?;
+                    sunshine::update(&exe, &images, &config)?;
                 }
                 Generate::Desktop => {
                     info!("Generating .desktop files");
-                    desktop::update(&images, &config)?;
+                    desktop::update(&exe, &images, &config)?;
                 }
                 Generate::Steam => {
                     info!("Adding units to steam");
-                    steam::update(&images, &config)?;
+                    steam::update(&exe, &images, &config)?;
                 }
                 Generate::All => {
-                    update_app(&images, &config)?;
+                    update_all(&exe, &images, &config)?;
                 }
             }
         }
@@ -138,7 +140,7 @@ fn run() -> Result<(), Error> {
 
             let process = |config: &Brie| {
                 let images = assets::download_all(&cache_dir, config)?;
-                update_app(&images, config)?;
+                update_all(&exe, &images, config)?;
                 Ok::<_, Error>(())
             };
 
@@ -187,13 +189,17 @@ fn run() -> Result<(), Error> {
     Ok(())
 }
 
-fn update_app(images: &HashMap<String, assets::Images>, config: &Brie) -> Result<(), Error> {
+fn update_all(
+    exe: &str,
+    images: &HashMap<String, assets::Images>,
+    config: &Brie,
+) -> Result<(), Error> {
     info!("Generating sunshine configuration");
-    sunshine::update(images, config)?;
+    sunshine::update(exe, images, config)?;
     info!("Generating .desktop files");
-    desktop::update(images, config)?;
+    desktop::update(exe, images, config)?;
     info!("Adding units to steam");
-    steam::update(images, config)?;
+    steam::update(exe, images, config)?;
 
     Ok(())
 }

@@ -1,9 +1,7 @@
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use brie_cfg::{Library, ReleaseVersion, Runtime};
+use indexmap::IndexMap;
 use indicatif::MultiProgress;
 use lazy_static::lazy_static;
 
@@ -35,17 +33,18 @@ trait WithContext<Target, Context> {
 #[derive(Debug)]
 pub struct Unit {
     pub runtime: Runtime,
-    pub libraries: BTreeMap<Library, ReleaseVersion>,
+    pub libraries: IndexMap<Library, ReleaseVersion>,
 
-    pub env: BTreeMap<String, String>,
+    pub env: IndexMap<String, String>,
     pub prefix: String,
 
-    pub mounts: BTreeMap<char, String>,
+    pub mounts: IndexMap<char, String>,
     pub before: Vec<Vec<String>>,
     pub winetricks: Vec<String>,
 
     pub cd: Option<String>,
     pub command: Vec<String>,
+    pub wrapper: Vec<String>,
 }
 
 #[derive(Debug)]

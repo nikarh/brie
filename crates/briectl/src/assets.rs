@@ -205,6 +205,7 @@ fn ensure_steamgriddb_ids(
     let found_ids = config
         .units
         .par_iter()
+        .map(|(k, v)| (k, v.common()))
         .filter(|(k, v)| !cached_ids.contains_key(*k) && v.steamgriddb_id.is_none())
         .filter_map(
             |(k, v)| match autocomplete(token, v.name.as_ref().unwrap_or(k)) {
@@ -237,6 +238,7 @@ fn ensure_steamgriddb_ids(
     let mut predefined_ids = config
         .units
         .iter()
+        .map(|(k, v)| (k, v.common()))
         .filter_map(|(k, v)| v.steamgriddb_id.map(|id| (k.to_owned(), id)))
         .collect::<HashMap<_, _>>();
 
@@ -358,17 +360,22 @@ mod tests {
             units: [
                 (
                     "witcher3".to_owned(),
-                    brie_cfg::Unit {
-                        name: Some("The Witcher 3".to_owned()),
-                        ..Default::default()
-                    },
+                    brie_cfg::Unit::Native(brie_cfg::NativeUnit {
+                        common: brie_cfg::UnitCommon {
+                            name: Some("The Witcher 3".to_owned()),
+                            ..Default::default()
+                        },
+                    }),
                 ),
                 (
                     "outerwilds".to_owned(),
-                    brie_cfg::Unit {
-                        name: Some("Outer Wilds".to_owned()),
-                        ..Default::default()
-                    },
+                    brie_cfg::Unit::Wine(brie_cfg::WineUnit {
+                        common: brie_cfg::UnitCommon {
+                            name: Some("The Witcher 3".to_owned()),
+                            ..Default::default()
+                        },
+                        ..brie_cfg::WineUnit::default()
+                    }),
                 ),
             ]
             .into(),

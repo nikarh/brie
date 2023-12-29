@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeMap,
     env,
     ffi::OsStr,
     io,
@@ -8,13 +7,14 @@ use std::{
 };
 
 use brie_cfg::Library;
+use indexmap::IndexMap;
 use log::debug;
 use path_absolutize::Absolutize;
 
 use crate::{dll::mut_env, Paths};
 
 pub struct Runner {
-    envs: BTreeMap<String, String>,
+    envs: IndexMap<String, String>,
     prefix: PathBuf,
 }
 
@@ -22,9 +22,9 @@ impl Runner {
     pub fn new(
         paths: &Paths,
         wine: impl AsRef<Path>,
-        mut envs: BTreeMap<String, String>,
+        mut envs: IndexMap<String, String>,
         prefix: &str,
-        libraries: &BTreeMap<Library, PathBuf>,
+        libraries: &IndexMap<Library, PathBuf>,
     ) -> Result<Self, io::Error> {
         let wine = wine.as_ref();
 

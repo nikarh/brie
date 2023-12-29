@@ -41,7 +41,7 @@ pub struct Config {
     pub rest: serde_json::Value,
 }
 
-pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
+pub fn update(exe: &str, images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
     let Some(sunshine_path) = config.paths.sunshine.as_ref() else {
         info!("Sunshine path not provided, skipping sunshine generation");
         return Ok(());
@@ -61,16 +61,18 @@ pub fn update(images: &HashMap<String, Images>, config: &Brie) -> Result<(), Err
         .unwrap_or_default();
 
     // Retain foreign entries
-    sunshine_config.apps.retain(|a| !a.cmd.starts_with("brie "));
+    // FIXME: find a better way to do this
+    sunshine_config.apps.retain(|a| !a.cmd.contains("brie "));
 
     config
         .units
         .iter()
+        .map(|(k, v)| (k, v.common()))
         .filter(|(_, unit)| unit.generate.sunshine)
         .map(|(k, unit)| App {
             name: unit.name.as_ref().unwrap_or(k).clone(),
             output: String::default(),
-            cmd: format!("brie {k}"),
+            cmd: format!("{exe} {k}"),
             image_path: images.get(k).and_then(|i| i.get(ImageKind::Grid).cloned()),
             rest: serde_json::Value::Object(serde_json::Map::default()),
         })
