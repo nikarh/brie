@@ -1,44 +1,40 @@
 name: Release
 
-permissions:
-  contents: write
-
 on:
-  release:
-    types: [published]
-
-defaults:
-  run:
-    shell: bash
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
 
 jobs:
-  upload-assets:
-    name: ${{ matrix.target }}
-    if: github.repository_owner == 'nikarh' && startsWith(github.event.release.name, 'brie-v')
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-22.04
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-22.04
-    timeout-minutes: 60
+  create-release:
+    runs-on: ubuntu-latest
+    environment: release
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - uses: taiki-e/setup-cross-toolchain-action@v1
+      - name: Generate GitHub token
+        uses: actions/create-github-app-token@v1
+        id: generate-token
         with:
-          target: ${{ matrix.target }}
-        if: startsWith(matrix.os, 'ubuntu') && !contains(matrix.target, '-musl')
-      - uses: taiki-e/install-action@cross
-        if: contains(matrix.target, '-musl')
-      - uses: taiki-e/upload-rust-binary-action@v1
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      - name: Checkout Code
+        uses: actions/checkout@v2
+      - name: Extract version from PR title
+        id: tag
+        run: echo "${{ github.event.pull_request.title }}" | awk '{print "name="  $2}' >> "$GITHUB_OUTPUT"
+      - name: Push a new tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.1
         with:
-          bin: brie,briectl
-          include: LICENSE-MIT,LICENSE-APACHE,CHANGELOG.md,README.md
-          target: ${{ matrix.target }}
-          tar: all
-          token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.generate-token.outputs.token }}
+          custom_tag: ${{ steps.tag.outputs.name }}
+          tag_prefix: ""
+      - name: Create a GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ steps.tag.outputs.name }}
+          name: ${{ github.event.pull_request.title }}
+          body: ${{ github.event.pull_request.body }}
+          token: ${{ steps.generate-token.outputs.token }}

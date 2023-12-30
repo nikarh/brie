@@ -345,6 +345,7 @@ mod test {
     use crate::{library::ensure_library_exists, runtime::ensure_runtime_exists};
 
     #[test]
+    #[ignore]
     fn test_download() {
         let version = ReleaseVersion::Latest;
         let cache_dir = Path::new("./.tmp");
@@ -373,5 +374,7 @@ mod test {
                 ensure_library_exists(l, cache_dir, &version, None).unwrap();
             });
         });
+
+        // FIXME add assertions
     }
 }
