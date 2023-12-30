@@ -1,8 +1,0 @@
-[workspace]
-changelog_update = false
-
-[[package]]
-name = "brie"
-changelog_update = true
-changelog_path = "./CHANGELOG.md"
-changelog_include = ["briectl", "brie_wine", "brie_cfg", "brie_download"]

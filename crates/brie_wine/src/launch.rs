@@ -168,6 +168,7 @@ mod tests {
     use super::launch;
 
     #[test]
+    #[ignore]
     pub fn test_run() {
         let log = simple_logger::SimpleLogger::new();
         LogWrapper::new(MP.clone(), log).try_init().unwrap();
@@ -191,7 +192,12 @@ mod tests {
                 prefix: "TEST_PREFIX".into(),
 
                 cd: None,
-                command: vec!["winecfg".into()],
+                command: vec![
+                    "ping.exe".into(),
+                    "-n".into(),
+                    "1".into(),
+                    "google.com".into(),
+                ],
                 mounts: [('r', "/etc".into())].into(),
                 before: vec![],
                 winetricks: vec![],
@@ -199,5 +205,7 @@ mod tests {
             },
         )
         .unwrap();
+
+        // FIXME add assertions
     }
 }

@@ -1,7 +1,7 @@
 # 🧀 Brie
 
 [![MIT/Apache 2.0](https://img.shields.io/badge/license-MIT%2FApache-blue.svg)](https://github.com/nikarh/brie#license)
-[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/nikarh/brie/main)](https://github.com/nikarh/brie/actions/workflows/main.yaml)
+[![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/nikarh/brie/main.yaml)](https://github.com/nikarh/brie/actions/workflows/main.yaml)
 [![Current Release](https://img.shields.io/github/release/nikarh/brie.svg)](https://github.com/nikarh/brie/releases)
 [![Release RSS Feed](https://img.shields.io/badge/rss-releases-ffa500?logo=rss)](https://github.com/nikarh/brie/releases.atom)
 [![Main Commits RSS Feed](https://img.shields.io/badge/rss-commits-ffa500?logo=rss)](https://github.com/nikarh/brie/commits/main.atom)
