@@ -1,14 +1,16 @@
 [package]
 name = "brie_download"
-version = "0.0.1"
-edition = "2021"
-
 description = "A library for running windows games on Linux via wine."
-repository = "https://github.com/nikarh/brie"
-license = "MIT OR Apache-2.0"
+publish = false
 
-authors = ["Nikolay Arhipov <n@arhipov.net>"]
-keywords = ["brie", "wine", "gaming"]
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
 
 [dependencies]
 lazy_static.workspace = true

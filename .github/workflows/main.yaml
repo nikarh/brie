@@ -1,13 +1,10 @@
-name: CI
+name: Check
 
 on:
   pull_request:
   push:
     branches:
       - "main"
-
-env:
-  RUSTFLAGS: -D warnings
 
 jobs:
   check:

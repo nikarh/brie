@@ -3,6 +3,16 @@ resolver = "2"
 members = ["crates/*"]
 exclude = [".github", ".vscode", "target"]
 
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+
+repository = "https://github.com/nikarh/brie"
+license = "MIT OR Apache-2.0"
+authors = ["Nikolay Arhipov <n@arhipov.net>"]
+keywords = ["brie", "wine", "gaming"]
+categories = ["command-line-utilities"]
+
 [workspace.dependencies]
 lazy_static = "1.4"
 thiserror = "1.0"

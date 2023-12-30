@@ -1,15 +1,15 @@
 [package]
 name = "briectl"
-version = "0.0.1"
-edition = "2021"
-
 description = "A tool for managing units used by brie command line tool."
-repository = "https://github.com/nikarh/brie"
-license = "MIT OR Apache-2.0"
+publish = false
 
-authors = ["Nikolay Arhipov <n@arhipov.net>"]
-keywords = ["brie", "wine", "gaming"]
-categories = ["command-line-utilities"]
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
 
 [dependencies]
 brie_cfg = { path = "../brie_cfg" }
