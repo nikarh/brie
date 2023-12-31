@@ -46,7 +46,7 @@ jobs:
         name: Generate a changelog for PR body
         run: git cliff -t v${{ steps.bump.outputs.version }} -u -o .CHANGELOG.md --strip footer
         env: 
-          GIT_CLIFF__CHANGELOG__FOOTER: "# Changelog\n\n"
+          GIT_CLIFF__CHANGELOG__HEADER: "# Changelog\n\n"
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
