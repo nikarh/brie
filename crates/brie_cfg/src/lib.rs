@@ -39,11 +39,13 @@ pub enum ReleaseVersion {
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
+#[serde(tag = "kind")]
 pub enum Unit {
-    Wine(WineUnit),
+    #[serde(rename = "native")]
     Native(NativeUnit),
+    #[serde(untagged)]
+    Wine(WineUnit),
 }
 
 impl Unit {
@@ -101,7 +103,6 @@ pub struct WineUnit {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(tag = "kind")]
 pub struct NativeUnit {
     #[serde(flatten)]
     pub common: UnitCommon,

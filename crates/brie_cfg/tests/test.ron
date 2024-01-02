@@ -6,6 +6,34 @@ Brie {
         desktop: None,
     },
     units: {
+        "native": Native(
+            NativeUnit {
+                common: UnitCommon {
+                    name: Some(
+                        "Steam: Big Picture Mode",
+                    ),
+                    steamgriddb_id: Some(
+                        2332,
+                    ),
+                    cd: None,
+                    command: [
+                        "flatpak",
+                        "run",
+                        "com.valvesoftware.Steam",
+                    ],
+                    env: {},
+                    generate: Generate {
+                        sunshine: true,
+                        desktop: false,
+                        steam_shortcut: false,
+                    },
+                    wrapper: [
+                        "gamemoderun",
+                        "mangohud",
+                    ],
+                },
+            },
+        ),
         "witcher3": Wine(
             WineUnit {
                 common: UnitCommon {
