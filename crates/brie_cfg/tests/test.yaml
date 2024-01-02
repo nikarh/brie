@@ -23,6 +23,17 @@ x-unit-defaults: &unit-defaults
     VKDED_CONFIG: dxr
 
 units:
+  native:
+    kind: native
+    name: "Steam: Big Picture Mode"
+    wrapper:
+      - gamemoderun
+      - mangohud
+    generate:
+      sunshine: true
+    steamgriddb_id: 2332
+    command:
+      ["flatpak", "run", "com.valvesoftware.Steam"]
   witcher3:
     <<: *unit-defaults
     name: The Witcher 3
