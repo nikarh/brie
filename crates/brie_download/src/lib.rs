@@ -1,12 +1,12 @@
-use std::{borrow::Cow, io};
+use std::{borrow::Cow, io, sync::OnceLock};
 
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish, ProgressState, ProgressStyle};
-use lazy_static::lazy_static;
 
 pub const USER_AGENT_HEADER: &str = "github.com/nikarh/brie";
 
-lazy_static! {
-    pub static ref MP: MultiProgress = MultiProgress::new();
+pub fn mp() -> &'static MultiProgress {
+    static MP: OnceLock<MultiProgress> = OnceLock::new();
+    MP.get_or_init(MultiProgress::new)
 }
 
 pub fn download_file(url: &str) -> Result<DownloadStream<impl io::Read>, Box<ureq::Error>> {
@@ -45,7 +45,7 @@ impl<R: io::Read> DownloadStream<R> {
         .with_key("eta", |state: &ProgressState, w: &mut dyn std::fmt::Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
         .progress_chars("#>-"));
 
-        let pb = MP.add(pb);
+        let pb = mp().add(pb);
 
         (pb.wrap_read(self.body), pb)
     }

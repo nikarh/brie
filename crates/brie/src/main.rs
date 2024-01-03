@@ -4,7 +4,7 @@ use std::{
 };
 
 use brie_cfg::NativeUnit;
-use brie_wine::{Paths, Unit, MP};
+use brie_wine::{Paths, Unit, mp};
 use indexmap::IndexMap;
 use log::debug;
 
@@ -13,7 +13,7 @@ fn main() {
         .with_level(log::LevelFilter::Info)
         .with_module_level("brie", log::LevelFilter::Trace);
     let max_level = log.max_level();
-    let _ = indicatif_log_bridge::LogWrapper::new(MP.clone(), log).try_init();
+    let _ = indicatif_log_bridge::LogWrapper::new(mp().clone(), log).try_init();
     log::set_max_level(max_level);
 
     if let Err(e) = launch() {

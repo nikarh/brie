@@ -14,6 +14,16 @@ use thiserror::Error;
 
 use crate::{command::Runner, library::Downloadable, WithContext};
 
+#[cfg(not(target_os = "linux"))]
+mod dl {
+    use std::io;
+
+    pub fn find_dl_path(_library: &str) -> Result<String, io::Error> {
+        return Err(io::Error::other("Unsupported platform"));
+    }
+}
+
+#[cfg(target_os = "linux")]
 mod dl {
     use std::{ffi::CStr, io};
 

@@ -2,8 +2,6 @@ use std::path::{Path, PathBuf};
 
 use brie_cfg::{Library, ReleaseVersion, Runtime};
 use indexmap::IndexMap;
-use indicatif::MultiProgress;
-use lazy_static::lazy_static;
 
 pub use launch::{launch, Error};
 
@@ -11,6 +9,7 @@ pub use dll::{CopyError, Error as DllError, InstallLibraryError, OverrideError};
 pub use downloader::Error as DownloadError;
 pub use prepare::{BeforeError, MountsError, WinePrefixError, WinetricksError};
 pub use runtime::Error as RuntimeError;
+pub use brie_download::mp;
 
 mod command;
 mod dll;
@@ -21,10 +20,6 @@ mod prepare;
 mod rayon_join;
 mod runtime;
 mod state;
-
-lazy_static! {
-    pub static ref MP: MultiProgress = MultiProgress::new();
-}
 
 trait WithContext<Target, Context> {
     fn context(self, context: Context) -> Target;

@@ -160,10 +160,11 @@ mod tests {
     use std::path::Path;
 
     use brie_cfg::{Library, ReleaseVersion, Runtime};
+    use brie_download::mp;
     use indexmap::IndexMap;
     use indicatif_log_bridge::LogWrapper;
 
-    use crate::{Paths, Unit, MP};
+    use crate::{Paths, Unit};
 
     use super::launch;
 
@@ -171,7 +172,7 @@ mod tests {
     #[ignore]
     pub fn test_run() {
         let log = simple_logger::SimpleLogger::new();
-        LogWrapper::new(MP.clone(), log).try_init().unwrap();
+        LogWrapper::new(mp().clone(), log).try_init().unwrap();
 
         launch(
             &Paths {
