@@ -24,6 +24,8 @@ use crate::downloader::{
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Download error. {0}")]
+    Download(#[from] brie_download::Error),
     #[error("Release check error. {0}")]
     Release(#[from] downloader::Error),
     #[error("Download error. {0}")]

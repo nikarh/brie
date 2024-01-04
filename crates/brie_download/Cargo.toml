@@ -16,6 +16,7 @@ categories.workspace = true
 lazy_static.workspace = true
 indicatif.workspace = true
 ureq.workspace = true
+thiserror.workspace = true
 native-tls.workspace = true
 
 [lints]

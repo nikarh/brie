@@ -1,4 +1,5 @@
 use brie_cfg::ReleaseVersion;
+use brie_download::TlsError;
 
 pub mod github;
 pub mod gitlab;
@@ -29,6 +30,8 @@ pub struct Release {
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("TLS error. {0}")]
+    Tls(#[from] &'static TlsError),
     #[error("Unable to get release data. {0}")]
     ReleaseGet(#[from] Box<ureq::Error>),
     #[error("Unable to parse release data. {0}")]

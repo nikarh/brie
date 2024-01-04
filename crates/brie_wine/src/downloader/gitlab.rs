@@ -40,10 +40,7 @@ where
 
         info!("Downloading {version:?} release metadata from {}", url);
 
-        let mut releases: Vec<GlFile> = ureq().get(&url)
-            .call()
-            .map_err(Box::new)?
-            .into_json()?;
+        let mut releases: Vec<GlFile> = ureq()?.get(&url).call().map_err(Box::new)?.into_json()?;
 
         let release = match version {
             ReleaseVersion::Latest => {

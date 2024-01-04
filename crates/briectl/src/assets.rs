@@ -5,7 +5,7 @@ use std::{
 };
 
 use brie_cfg::Brie;
-use brie_download::{download_file, mp, ureq};
+use brie_download::{download_file, mp, ureq, TlsError};
 use image::GenericImageView;
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
 use log::{debug, error, info, warn};
@@ -14,6 +14,10 @@ use serde::Deserialize;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("TLS error. {0}")]
+    Tls(#[from] &'static TlsError),
+    #[error("Download error. {0}")]
+    Download(#[from] brie_download::Error),
     #[error("HTTP error. {0}")]
     Http(#[from] Box<ureq::Error>),
     #[error("IO error. {0}")]
@@ -48,7 +52,7 @@ fn autocomplete(token: &str, name: &str) -> Result<Option<u32>, Error> {
         .map_err(|()| Error::InvalidUrl)?
         .push(name);
 
-    let res: Container<Vec<AutocompleteResponse>> = ureq()
+    let res: Container<Vec<AutocompleteResponse>> = ureq()?
         .request_url("GET", &url)
         .set("Authorization", &format!("Bearer {token}"))
         .call()
@@ -118,7 +122,7 @@ fn image(token: &str, kind: ImageKind, id: u32) -> Result<Option<Vec<u8>>, Error
         kind = kind.path()
     );
 
-    let res: Container<Vec<ImageResponse>> = ureq()
+    let res: Container<Vec<ImageResponse>> = ureq()?
         .get(&url)
         .set("Authorization", &format!("Bearer {token}"))
         .call()

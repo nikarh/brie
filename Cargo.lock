@@ -166,6 +166,7 @@ dependencies = [
  "indicatif",
  "lazy_static",
  "native-tls",
+ "thiserror",
  "ureq",
 ]
 

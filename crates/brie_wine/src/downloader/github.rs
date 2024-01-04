@@ -48,7 +48,8 @@ where
 
         info!("Downloading {version:?} release metadata from {}", url);
 
-        let release: GhRelease = ureq().get(&url)
+        let release: GhRelease = ureq()?
+            .get(&url)
             .set("Accept", ACCEPT_HEADER)
             .call()
             .map_err(Box::new)?

@@ -1,4 +1,10 @@
-use std::{borrow::Cow, io, sync::{OnceLock, Arc}};
+use std::{
+    borrow::Cow,
+    io,
+    sync::{Arc, OnceLock},
+};
+
+pub use native_tls::Error as TlsError;
 
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish, ProgressState, ProgressStyle};
 
@@ -9,20 +15,28 @@ pub fn mp() -> &'static MultiProgress {
     MP.get_or_init(MultiProgress::new)
 }
 
-pub fn ureq() -> &'static ureq::Agent {
-    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
-    AGENT.get_or_init(|| {
-        ureq::AgentBuilder::new()
-            .user_agent(USER_AGENT_HEADER)
-            .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
-            .build()
-    })
+pub fn ureq() -> Result<&'static ureq::Agent, &'static native_tls::Error> {
+    static AGENT: OnceLock<Result<ureq::Agent, native_tls::Error>> = OnceLock::new();
+    AGENT
+        .get_or_init(|| {
+            Ok(ureq::AgentBuilder::new()
+                .user_agent(USER_AGENT_HEADER)
+                .tls_connector(Arc::new(native_tls::TlsConnector::new()?))
+                .build())
+        })
+        .as_ref()
 }
 
-pub fn download_file(url: &str) -> Result<DownloadStream<impl io::Read>, Box<ureq::Error>> {
-    let response = ureq().get(url)
-        .call()
-        .map_err(Box::new)?;
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("TLS error. {0}")]
+    Tls(#[from] &'static TlsError),
+    #[error("Http error. {0}")]
+    Ureq(#[from] Box<ureq::Error>),
+}
+
+pub fn download_file(url: &str) -> Result<DownloadStream<impl io::Read>, Error> {
+    let response = ureq()?.get(url).call().map_err(Box::new)?;
 
     let len = response
         .header("Content-Length")
