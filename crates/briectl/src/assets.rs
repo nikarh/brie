@@ -5,7 +5,7 @@ use std::{
 };
 
 use brie_cfg::Brie;
-use brie_download::{download_file, MP, USER_AGENT_HEADER};
+use brie_download::{download_file, mp, ureq, TlsError};
 use image::GenericImageView;
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
 use log::{debug, error, info, warn};
@@ -14,6 +14,10 @@ use serde::Deserialize;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
+    #[error("TLS error. {0}")]
+    Tls(#[from] &'static TlsError),
+    #[error("Download error. {0}")]
+    Download(#[from] brie_download::Error),
     #[error("HTTP error. {0}")]
     Http(#[from] Box<ureq::Error>),
     #[error("IO error. {0}")]
@@ -48,8 +52,8 @@ fn autocomplete(token: &str, name: &str) -> Result<Option<u32>, Error> {
         .map_err(|()| Error::InvalidUrl)?
         .push(name);
 
-    let res: Container<Vec<AutocompleteResponse>> = ureq::request_url("GET", &url)
-        .set("User-Agent", USER_AGENT_HEADER)
+    let res: Container<Vec<AutocompleteResponse>> = ureq()?
+        .request_url("GET", &url)
         .set("Authorization", &format!("Bearer {token}"))
         .call()
         .map_err(Box::new)?
@@ -118,8 +122,8 @@ fn image(token: &str, kind: ImageKind, id: u32) -> Result<Option<Vec<u8>>, Error
         kind = kind.path()
     );
 
-    let res: Container<Vec<ImageResponse>> = ureq::get(&url)
-        .set("User-Agent", USER_AGENT_HEADER)
+    let res: Container<Vec<ImageResponse>> = ureq()?
+        .get(&url)
         .set("Authorization", &format!("Bearer {token}"))
         .call()
         .map_err(Box::new)?
@@ -135,7 +139,7 @@ fn image(token: &str, kind: ImageKind, id: u32) -> Result<Option<Vec<u8>>, Error
     lib.read_to_end(&mut img)?;
     pb.finish();
 
-    let pb = MP.add(
+    let pb = mp().add(
         ProgressBar::new_spinner()
             .with_message(format!("Converting {id}-{kind} to png"))
             .with_finish(ProgressFinish::AndLeave)
@@ -324,7 +328,7 @@ pub fn download_all(cache_dir: &Path, config: &Brie) -> Result<HashMap<String, I
 mod tests {
     use std::path::Path;
 
-    use brie_download::MP;
+    use brie_download::mp;
     use indicatif_log_bridge::LogWrapper;
 
     use crate::assets::ImageKind;
@@ -352,7 +356,7 @@ mod tests {
         let log = simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Info)
             .env();
-        LogWrapper::new(MP.clone(), log).try_init().unwrap();
+        LogWrapper::new(mp().clone(), log).try_init().unwrap();
 
         let cache_dir = Path::new(".tmp/cache");
         let config = brie_cfg::Brie {

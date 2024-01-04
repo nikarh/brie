@@ -1,4 +1,4 @@
-use brie_download::USER_AGENT_HEADER;
+use brie_download::ureq;
 use log::info;
 use serde::Deserialize;
 
@@ -48,8 +48,8 @@ where
 
         info!("Downloading {version:?} release metadata from {}", url);
 
-        let release: GhRelease = ureq::get(&url)
-            .set("User-Agent", USER_AGENT_HEADER)
+        let release: GhRelease = ureq()?
+            .get(&url)
             .set("Accept", ACCEPT_HEADER)
             .call()
             .map_err(Box::new)?

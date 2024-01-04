@@ -1,19 +1,42 @@
-use std::{borrow::Cow, io};
+use std::{
+    borrow::Cow,
+    io,
+    sync::{Arc, OnceLock},
+};
+
+pub use native_tls::Error as TlsError;
 
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish, ProgressState, ProgressStyle};
-use lazy_static::lazy_static;
 
 pub const USER_AGENT_HEADER: &str = "github.com/nikarh/brie";
 
-lazy_static! {
-    pub static ref MP: MultiProgress = MultiProgress::new();
+pub fn mp() -> &'static MultiProgress {
+    static MP: OnceLock<MultiProgress> = OnceLock::new();
+    MP.get_or_init(MultiProgress::new)
 }
 
-pub fn download_file(url: &str) -> Result<DownloadStream<impl io::Read>, Box<ureq::Error>> {
-    let response = ureq::get(url)
-        .set("User-Agent", USER_AGENT_HEADER)
-        .call()
-        .map_err(Box::new)?;
+pub fn ureq() -> Result<&'static ureq::Agent, &'static native_tls::Error> {
+    static AGENT: OnceLock<Result<ureq::Agent, native_tls::Error>> = OnceLock::new();
+    AGENT
+        .get_or_init(|| {
+            Ok(ureq::AgentBuilder::new()
+                .user_agent(USER_AGENT_HEADER)
+                .tls_connector(Arc::new(native_tls::TlsConnector::new()?))
+                .build())
+        })
+        .as_ref()
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum Error {
+    #[error("TLS error. {0}")]
+    Tls(#[from] &'static TlsError),
+    #[error("Http error. {0}")]
+    Ureq(#[from] Box<ureq::Error>),
+}
+
+pub fn download_file(url: &str) -> Result<DownloadStream<impl io::Read>, Error> {
+    let response = ureq()?.get(url).call().map_err(Box::new)?;
 
     let len = response
         .header("Content-Length")
@@ -45,7 +68,7 @@ impl<R: io::Read> DownloadStream<R> {
         .with_key("eta", |state: &ProgressState, w: &mut dyn std::fmt::Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
         .progress_chars("#>-"));
 
-        let pb = MP.add(pb);
+        let pb = mp().add(pb);
 
         (pb.wrap_read(self.body), pb)
     }

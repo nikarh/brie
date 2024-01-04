@@ -1,4 +1,4 @@
-use brie_download::USER_AGENT_HEADER;
+use brie_download::ureq;
 use log::info;
 use serde::Deserialize;
 
@@ -40,11 +40,7 @@ where
 
         info!("Downloading {version:?} release metadata from {}", url);
 
-        let mut releases: Vec<GlFile> = ureq::get(&url)
-            .set("User-Agent", USER_AGENT_HEADER)
-            .call()
-            .map_err(Box::new)?
-            .into_json()?;
+        let mut releases: Vec<GlFile> = ureq()?.get(&url).call().map_err(Box::new)?.into_json()?;
 
         let release = match version {
             ReleaseVersion::Latest => {

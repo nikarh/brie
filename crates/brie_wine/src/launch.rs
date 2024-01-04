@@ -160,18 +160,23 @@ mod tests {
     use std::path::Path;
 
     use brie_cfg::{Library, ReleaseVersion, Runtime};
+    use brie_download::mp;
     use indexmap::IndexMap;
     use indicatif_log_bridge::LogWrapper;
 
-    use crate::{Paths, Unit, MP};
+    use crate::{Paths, Unit};
 
     use super::launch;
 
     #[test]
     #[ignore]
     pub fn test_run() {
-        let log = simple_logger::SimpleLogger::new();
-        LogWrapper::new(MP.clone(), log).try_init().unwrap();
+        let log = simple_logger::SimpleLogger::new()
+            .with_level(log::LevelFilter::Info)
+            .with_module_level("brie", log::LevelFilter::Trace);
+        let max_level = log.max_level();
+        let _ = LogWrapper::new(mp().clone(), log).try_init();
+        log::set_max_level(max_level);
 
         launch(
             &Paths {

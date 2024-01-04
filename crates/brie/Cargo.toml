@@ -16,7 +16,6 @@ brie_cfg = { path = "../brie_cfg" }
 brie_wine = { path = "../brie_wine" }
 
 indexmap.workspace = true
-serde_yaml.workspace = true
 xdg.workspace = true
 thiserror.workspace = true
 
