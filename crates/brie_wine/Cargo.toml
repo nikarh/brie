@@ -16,7 +16,6 @@ brie_cfg = { path = "../brie_cfg" }
 brie_download = { path = "../brie_download" }
 
 log.workspace = true
-indicatif.workspace = true
 
 thiserror.workspace = true
 which.workspace = true

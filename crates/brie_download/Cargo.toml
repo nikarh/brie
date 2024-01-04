@@ -13,7 +13,6 @@ categories.workspace = true
 
 
 [dependencies]
-lazy_static.workspace = true
 indicatif.workspace = true
 ureq.workspace = true
 thiserror.workspace = true
