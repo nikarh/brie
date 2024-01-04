@@ -171,8 +171,12 @@ mod tests {
     #[test]
     #[ignore]
     pub fn test_run() {
-        let log = simple_logger::SimpleLogger::new();
-        LogWrapper::new(mp().clone(), log).try_init().unwrap();
+        let log = simple_logger::SimpleLogger::new()
+            .with_level(log::LevelFilter::Info)
+            .with_module_level("brie", log::LevelFilter::Trace);
+        let max_level = log.max_level();
+        let _ = LogWrapper::new(mp().clone(), log).try_init();
+        log::set_max_level(max_level);
 
         launch(
             &Paths {

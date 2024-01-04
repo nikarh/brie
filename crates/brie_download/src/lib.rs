@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io, sync::OnceLock};
+use std::{borrow::Cow, io, sync::{OnceLock, Arc}};
 
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish, ProgressState, ProgressStyle};
 
@@ -9,9 +9,18 @@ pub fn mp() -> &'static MultiProgress {
     MP.get_or_init(MultiProgress::new)
 }
 
+pub fn ureq() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::AgentBuilder::new()
+            .user_agent(USER_AGENT_HEADER)
+            .tls_connector(Arc::new(native_tls::TlsConnector::new().unwrap()))
+            .build()
+    })
+}
+
 pub fn download_file(url: &str) -> Result<DownloadStream<impl io::Read>, Box<ureq::Error>> {
-    let response = ureq::get(url)
-        .set("User-Agent", USER_AGENT_HEADER)
+    let response = ureq().get(url)
         .call()
         .map_err(Box::new)?;
 

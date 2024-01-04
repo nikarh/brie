@@ -5,7 +5,7 @@ use std::{
 };
 
 use brie_cfg::Brie;
-use brie_download::{download_file, mp, USER_AGENT_HEADER};
+use brie_download::{download_file, mp, ureq};
 use image::GenericImageView;
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
 use log::{debug, error, info, warn};
@@ -48,8 +48,8 @@ fn autocomplete(token: &str, name: &str) -> Result<Option<u32>, Error> {
         .map_err(|()| Error::InvalidUrl)?
         .push(name);
 
-    let res: Container<Vec<AutocompleteResponse>> = ureq::request_url("GET", &url)
-        .set("User-Agent", USER_AGENT_HEADER)
+    let res: Container<Vec<AutocompleteResponse>> = ureq()
+        .request_url("GET", &url)
         .set("Authorization", &format!("Bearer {token}"))
         .call()
         .map_err(Box::new)?
@@ -118,8 +118,8 @@ fn image(token: &str, kind: ImageKind, id: u32) -> Result<Option<Vec<u8>>, Error
         kind = kind.path()
     );
 
-    let res: Container<Vec<ImageResponse>> = ureq::get(&url)
-        .set("User-Agent", USER_AGENT_HEADER)
+    let res: Container<Vec<ImageResponse>> = ureq()
+        .get(&url)
         .set("Authorization", &format!("Bearer {token}"))
         .call()
         .map_err(Box::new)?
