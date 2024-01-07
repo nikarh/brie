@@ -28,7 +28,7 @@ log.workspace = true
 indicatif.workspace = true
 xdg.workspace = true
 shellexpand.workspace = true
-inotify.workspace = true
+notify.workspace = true
 steam_shortcuts_util.workspace = true
 
 simple_logger.workspace = true
