@@ -117,6 +117,7 @@ dependencies = [
  "indicatif-log-bridge",
  "log",
  "pretty_assertions",
+ "shellexpand",
  "simple_logger",
  "thiserror",
  "xdg",

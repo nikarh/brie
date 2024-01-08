@@ -1,10 +1,10 @@
 use std::{
-    env::args,
+    env::{args, VarError},
     process::{Command, Stdio},
 };
 
 use brie_cfg::NativeUnit;
-use brie_wine::{Paths, Unit, mp};
+use brie_wine::{mp, Paths, Unit};
 use indexmap::IndexMap;
 use log::debug;
 
@@ -56,6 +56,8 @@ enum Error {
     EmptyCommand,
     #[error("Error running native unit. {0}")]
     Native(#[source] std::io::Error),
+    #[error("Unable to expand `cd`. {0}")]
+    Shellexpand(#[from] shellexpand::LookupError<VarError>),
 }
 
 fn launch() -> Result<(), Error> {
@@ -87,6 +89,12 @@ fn launch() -> Result<(), Error> {
             args.extend(unit.command);
 
             let mut command = Command::new(&args[0]);
+
+            if let Some(cd) = unit.cd.as_ref() {
+                let cd = shellexpand::full(cd)?;
+                command.current_dir(cd.as_ref());
+            }
+
             command
                 .args(&args[1..])
                 .stdin(Stdio::null())
