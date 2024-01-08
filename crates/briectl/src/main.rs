@@ -1,10 +1,15 @@
-use std::{collections::HashMap, io, process::Command};
+use std::{
+    collections::HashMap,
+    io,
+    process::Command,
+    sync::{mpsc, Arc},
+};
 
 use brie_cfg::Brie;
 use brie_download::mp;
 use clap::{Parser, Subcommand};
-use inotify::{Inotify, WatchMask};
 use log::{error, info};
+use notify::{event::ModifyKind, Event, EventKind, RecursiveMode, Watcher};
 
 mod assets;
 mod desktop;
@@ -85,6 +90,8 @@ enum Error {
     Steam(#[from] steam::Error),
     #[error("IO error. {0}")]
     Io(#[from] io::Error),
+    #[error("Notify error. {0}")]
+    Notify(#[from] notify::Error),
 }
 
 fn run() -> Result<(), Error> {
@@ -136,7 +143,29 @@ fn run() -> Result<(), Error> {
                 "Watching config file `{}` for changes",
                 config_file.display()
             );
-            let mut inotify = Inotify::init()?;
+
+            let (sender, receiver) = mpsc::channel::<()>();
+
+            let sender = Arc::new(sender);
+            let on_event = || {
+                let sender = sender.clone();
+                move |res: notify::Result<Event>| {
+                    match &res {
+                        Ok(event) => match event.kind {
+                            EventKind::Create(_)
+                            | EventKind::Modify(ModifyKind::Data(_))
+                            | EventKind::Remove(_) => {
+                                log::debug!("Received event: {event:?}");
+                                let _ = sender.send(());
+                            }
+                            _ => {}
+                        },
+                        Err(err) => {
+                            error!("Event error: {err}");
+                        }
+                    };
+                }
+            };
 
             let process = |config: &Brie| {
                 let images = assets::download_all(&cache_dir, config)?;
@@ -145,44 +174,37 @@ fn run() -> Result<(), Error> {
             };
 
             let mut config = brie_cfg::read(config_file.clone())?;
-            let mut buffer = [0u8; 4096];
-            let mut update = true;
 
-            loop {
-                if update {
-                    info!("Processing config");
-                    if let Err(err) = process(&config) {
-                        error!("Watch error: {err}");
-                    }
+            info!("Processing config before watch");
+            if let Err(err) = process(&config) {
+                error!("Error processing config: {err}");
+            }
 
-                    update = false;
-                }
+            info!("Starting watcher");
+            let mut watcher = notify::recommended_watcher(on_event())?;
+            watcher.watch(&config_file, RecursiveMode::NonRecursive)?;
 
-                info!("Waiting for events via inotify");
-                inotify.watches().add(
-                    &config_file,
-                    WatchMask::MODIFY
-                        | WatchMask::CREATE
-                        | WatchMask::DELETE_SELF
-                        | WatchMask::MOVE
-                        | WatchMask::CLOSE_WRITE
-                        | WatchMask::ONESHOT,
-                )?;
-                let mut events = inotify.read_events_blocking(&mut buffer)?;
-                let Some(event) = events.next() else {
-                    continue;
-                };
+            while let Ok(()) = receiver.recv() {
+                // If a file is edited by deleting the original and creating a new one, without restarting the watcher
+                // after deletion watcher will never receive new events.
+                watcher = notify::recommended_watcher(on_event())?;
+                watcher.watch(&config_file, RecursiveMode::NonRecursive)?;
 
-                info!("Handling event: {:?}", event);
+                info!("Received event, processing config");
+
                 let new_config = brie_cfg::read(config_file.clone())?;
                 if new_config == config {
                     info!("Config did not change");
                     continue;
                 }
-
                 config = new_config;
-                update = true;
+
+                if let Err(err) = process(&config) {
+                    error!("Error processing config: {err}");
+                }
             }
+
+            info!("Loop ended?");
         }
     };
 
