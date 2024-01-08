@@ -1,4 +1,9 @@
-use std::{collections::HashMap, io, process::Command, sync::mpsc};
+use std::{
+    collections::HashMap,
+    io,
+    process::Command,
+    sync::{mpsc, Arc},
+};
 
 use brie_cfg::Brie;
 use brie_download::mp;
@@ -140,22 +145,27 @@ fn run() -> Result<(), Error> {
             );
 
             let (sender, receiver) = mpsc::channel::<()>();
-            let mut watcher = notify::recommended_watcher(move |res: notify::Result<Event>| {
-                match &res {
-                    Ok(event) => match event.kind {
-                        EventKind::Create(_)
-                        | EventKind::Modify(ModifyKind::Data(_))
-                        | EventKind::Remove(_) => {
-                            log::debug!("Received event: {event:?}");
-                            let _ = sender.send(());
+
+            let sender = Arc::new(sender);
+            let on_event = || {
+                let sender = sender.clone();
+                move |res: notify::Result<Event>| {
+                    match &res {
+                        Ok(event) => match event.kind {
+                            EventKind::Create(_)
+                            | EventKind::Modify(ModifyKind::Data(_))
+                            | EventKind::Remove(_) => {
+                                log::debug!("Received event: {event:?}");
+                                let _ = sender.send(());
+                            }
+                            _ => {}
+                        },
+                        Err(err) => {
+                            error!("Event error: {err}");
                         }
-                        _ => {}
-                    },
-                    Err(err) => {
-                        error!("Event error: {err}");
-                    }
-                };
-            })?;
+                    };
+                }
+            };
 
             let process = |config: &Brie| {
                 let images = assets::download_all(&cache_dir, config)?;
@@ -171,9 +181,15 @@ fn run() -> Result<(), Error> {
             }
 
             info!("Starting watcher");
+            let mut watcher = notify::recommended_watcher(on_event())?;
             watcher.watch(&config_file, RecursiveMode::NonRecursive)?;
 
             while let Ok(()) = receiver.recv() {
+                // If a file is edited by deleting the original and creating a new one, without restarting the watcher
+                // after deletion watcher will never receive new events.
+                watcher = notify::recommended_watcher(on_event())?;
+                watcher.watch(&config_file, RecursiveMode::NonRecursive)?;
+
                 info!("Received event, processing config");
 
                 let new_config = brie_cfg::read(config_file.clone())?;
@@ -188,7 +204,7 @@ fn run() -> Result<(), Error> {
                 }
             }
 
-            info!("Loop ended?")
+            info!("Loop ended?");
         }
     };
 
