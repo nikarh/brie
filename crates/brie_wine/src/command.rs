@@ -44,10 +44,9 @@ impl Runner {
             envs.insert("PATH".to_owned(), path);
         }
 
-        envs.insert(
-            "WINEDLLOVERRIDES".to_owned(),
-            "winemenubuilder.exe=".to_owned(),
-        );
+        let dll_overrides = envs.entry("WINEDLLOVERRIDES".to_owned()).or_default();
+        dll_overrides.push_str(if dll_overrides.is_empty() { "" } else { ";" });
+        dll_overrides.push_str("winemenubuilder.exe=");
 
         for (&library, path) in libraries {
             mut_env(library, path, &mut envs);
