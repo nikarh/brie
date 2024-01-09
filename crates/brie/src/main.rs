@@ -1,12 +1,9 @@
-use std::{
-    env::{args, VarError},
-    process::{Command, Stdio},
-};
+use std::env::args;
 
-use brie_cfg::NativeUnit;
 use brie_wine::{mp, Paths, Unit};
 use indexmap::IndexMap;
-use log::debug;
+
+mod native;
 
 fn main() {
     let log = simple_logger::SimpleLogger::new()
@@ -46,18 +43,14 @@ enum Error {
     Xdg(#[from] xdg::BaseDirectoriesError),
     #[error("Config error. {0}")]
     Config(#[from] brie_cfg::Error),
-    #[error("Wine run error. {0}")]
-    Wine(#[from] brie_wine::Error),
     #[error("Unit not provided as an argument. Available units:\n{0}")]
     NoUnitProvided(Units),
     #[error("Unit `{0}` not found. Available units:\n{1}")]
     NotFound(String, Units),
-    #[error("Invalid unit - empty command field.")]
-    EmptyCommand,
-    #[error("Error running native unit. {0}")]
-    Native(#[source] std::io::Error),
-    #[error("Unable to expand `cd`. {0}")]
-    Shellexpand(#[from] shellexpand::LookupError<VarError>),
+    #[error("Wine unit error. {0}")]
+    Wine(#[from] brie_wine::Error),
+    #[error("Native unit error. {0}")]
+    Native(#[from] native::Error),
 }
 
 fn launch() -> Result<(), Error> {
@@ -80,34 +73,8 @@ fn launch() -> Result<(), Error> {
     unit.common_mut().command.extend(args);
 
     match unit {
-        brie_cfg::Unit::Native(NativeUnit { common: unit }) => {
-            if unit.command.is_empty() {
-                return Err(Error::EmptyCommand);
-            }
-
-            let mut args = unit.wrapper;
-            args.extend(unit.command);
-
-            let mut command = Command::new(&args[0]);
-
-            if let Some(cd) = unit.cd.as_ref() {
-                let cd = shellexpand::full(cd)?;
-                command.current_dir(cd.as_ref());
-            }
-
-            command
-                .args(&args[1..])
-                .stdin(Stdio::null())
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .envs(&unit.env);
-
-            if let Some(cd) = unit.cd {
-                command.current_dir(cd);
-            }
-
-            debug!("Running command: {:?}", args);
-            command.status().map_err(Error::Native)?;
+        brie_cfg::Unit::Native(unit) => {
+            native::launch(unit)?;
         }
         brie_cfg::Unit::Wine(unit) => {
             let paths = Paths::new(&data_home);

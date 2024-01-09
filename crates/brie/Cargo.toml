@@ -19,6 +19,7 @@ shellexpand.workspace = true
 indexmap.workspace = true
 xdg.workspace = true
 thiserror.workspace = true
+path-absolutize.workspace = true
 
 log.workspace = true
 simple_logger.workspace = true
