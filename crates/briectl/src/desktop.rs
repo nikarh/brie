@@ -1,15 +1,10 @@
-use std::{
-    collections::HashMap,
-    env::VarError,
-    io,
-    path::{Path, PathBuf},
-};
+use std::{env::VarError, io, path::Path};
 
 use brie_cfg::Brie;
 use log::{debug, info};
 use shellexpand::LookupError;
 
-use crate::assets::{ImageKind, Images};
+use crate::assets::{Assets, ImageKind};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -19,7 +14,7 @@ pub enum Error {
     Expand(#[from] LookupError<VarError>),
 }
 
-pub fn update(exe: &str, images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
+pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     let Some(desktop_path) = config.paths.desktop.as_ref() else {
         info!("Desktop file path not provided, skipping generation");
         return Ok(());
@@ -51,10 +46,9 @@ pub fn update(exe: &str, images: &HashMap<String, Images>, config: &Brie) -> Res
     {
         let path = desktop_path.join(format!("brie-{key}.desktop"));
 
-        let icon = images
-            .get(key)
-            .and_then(|p| p.get(ImageKind::Icon))
-            .map_or_else(|| Path::new(""), PathBuf::as_path);
+        let icon = assets
+            .get(key, ImageKind::Icon)
+            .unwrap_or_else(|| Path::new(""));
 
         let name = unit.name.as_ref().unwrap_or(key);
         let desktop = format!(
