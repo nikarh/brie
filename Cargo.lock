@@ -116,6 +116,7 @@ dependencies = [
  "indexmap 2.1.0",
  "indicatif-log-bridge",
  "log",
+ "path-absolutize",
  "pretty_assertions",
  "shellexpand",
  "simple_logger",
