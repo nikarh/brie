@@ -50,11 +50,7 @@ pub fn launch(unit: NativeUnit) -> Result<(), Error> {
         .stderr(Stdio::inherit())
         .envs(&unit.env);
 
-    if let Some(cd) = unit.cd {
-        command.current_dir(cd);
-    }
-
-    debug!("Running command: {:?}", args);
+    debug!("Running command: {command:?}");
     command.status()?;
 
     Ok(())
