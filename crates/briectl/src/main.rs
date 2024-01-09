@@ -1,10 +1,10 @@
 use std::{
-    collections::HashMap,
     io,
     process::Command,
     sync::{mpsc, Arc},
 };
 
+use assets::Assets;
 use brie_cfg::Brie;
 use brie_download::mp;
 use clap::{Parser, Subcommand};
@@ -168,8 +168,8 @@ fn run() -> Result<(), Error> {
             };
 
             let process = |config: &Brie| {
-                let images = assets::download_all(&cache_dir, config)?;
-                update_all(&exe, &images, config)?;
+                let assets = assets::download_all(&cache_dir, config)?;
+                update_all(&exe, &assets, config)?;
                 Ok::<_, Error>(())
             };
 
@@ -211,17 +211,13 @@ fn run() -> Result<(), Error> {
     Ok(())
 }
 
-fn update_all(
-    exe: &str,
-    images: &HashMap<String, assets::Images>,
-    config: &Brie,
-) -> Result<(), Error> {
+fn update_all(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     info!("Generating sunshine configuration");
-    sunshine::update(exe, images, config)?;
+    sunshine::update(exe, assets, config)?;
     info!("Generating .desktop files");
-    desktop::update(exe, images, config)?;
+    desktop::update(exe, assets, config)?;
     info!("Adding units to steam");
-    steam::update(exe, images, config)?;
+    steam::update(exe, assets, config)?;
 
     Ok(())
 }

@@ -1,16 +1,17 @@
 use std::{
-    collections::{HashMap, HashSet},
+    borrow::Cow,
+    collections::HashMap,
     io::Read,
     path::{Path, PathBuf},
 };
 
 use brie_cfg::Brie;
 use brie_download::{download_file, mp, ureq, TlsError};
-use image::GenericImageView;
+use image::{GenericImageView, ImageFormat};
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
 use log::{debug, error, info, warn};
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -62,16 +63,22 @@ fn autocomplete(token: &str, name: &str) -> Result<Option<u32>, Error> {
     Ok(res.data.first().map(|r| r.id))
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ImageKind {
     Grid,
     Icon,
     Hero,
+    Logo,
 }
 
 impl ImageKind {
-    fn all() -> [ImageKind; 3] {
-        [ImageKind::Grid, ImageKind::Icon, ImageKind::Hero]
+    pub fn all() -> [ImageKind; 4] {
+        [
+            ImageKind::Grid,
+            ImageKind::Icon,
+            ImageKind::Hero,
+            ImageKind::Logo,
+        ]
     }
 
     fn path(self) -> &'static str {
@@ -79,7 +86,12 @@ impl ImageKind {
             ImageKind::Grid => "grids",
             ImageKind::Icon => "icons",
             ImageKind::Hero => "heroes",
+            ImageKind::Logo => "logos",
         }
+    }
+
+    fn require_png(self) -> bool {
+        matches!(self, Self::Grid | Self::Icon)
     }
 }
 
@@ -89,6 +101,7 @@ impl std::fmt::Display for ImageKind {
             ImageKind::Grid => "grid",
             ImageKind::Icon => "icon",
             ImageKind::Hero => "hero",
+            ImageKind::Logo => "logo",
         })
     }
 }
@@ -101,8 +114,9 @@ impl ImageKind {
                 .find(|img| img.width == 600)
                 .or(images.first())
                 .map(|img| img.url.as_str()),
-            ImageKind::Icon => images.first().map(|img| img.thumb.as_str()),
-            ImageKind::Hero => images.first().map(|img| img.thumb.as_str()),
+            ImageKind::Icon | ImageKind::Hero | ImageKind::Logo => {
+                images.first().map(|img| img.thumb.as_str())
+            }
         }
     }
 }
@@ -114,8 +128,8 @@ struct ImageResponse {
     width: u32,
 }
 
-fn image(token: &str, kind: ImageKind, id: u32) -> Result<Option<Vec<u8>>, Error> {
-    info!("Downloading and re-encoding `{kind}` image for {id}");
+fn image(token: &str, kind: ImageKind, id: u32, name: &str) -> Result<Option<Vec<u8>>, Error> {
+    info!("Downloading and re-encoding `{kind}` image for {id} ({name})");
 
     let url = format!(
         "https://www.steamgriddb.com/api/v2/{kind}/game/{id}",
@@ -139,21 +153,21 @@ fn image(token: &str, kind: ImageKind, id: u32) -> Result<Option<Vec<u8>>, Error
     lib.read_to_end(&mut img)?;
     pb.finish();
 
-    let pb = mp().add(
-        ProgressBar::new_spinner()
-            .with_message(format!("Converting {id}-{kind} to png"))
-            .with_finish(ProgressFinish::AndLeave)
-            .with_style(
-                ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] {msg:>15}")
-                    .unwrap(),
-            ),
-    );
+    if kind.require_png() {
+        let pb = mp().add(
+            ProgressBar::new_spinner()
+                .with_message(format!("Converting {id}-{kind} ({name}) to png"))
+                .with_finish(ProgressFinish::AndLeave)
+                .with_style(
+                    ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] {msg:>15}")
+                        .unwrap(),
+                ),
+        );
+        img = convert_to_png(&img)?;
+        pb.finish_with_message(format!("Converted {id}-{kind} to png"));
+    }
 
-    let png = convert_to_png(&img)?;
-
-    pb.finish_with_message(format!("Converted {id}-{kind} to png"));
-
-    Ok(Some(png))
+    Ok(Some(img))
 }
 
 fn convert_to_png(image: &[u8]) -> Result<Vec<u8>, Error> {
@@ -190,18 +204,56 @@ fn convert_to_png(image: &[u8]) -> Result<Vec<u8>, Error> {
     Ok(png)
 }
 
+#[derive(Default, Serialize, Deserialize, Debug, Clone)]
+pub struct Images(HashMap<ImageKind, PathBuf>);
+
+impl Images {
+    pub fn get(&self, kind: ImageKind) -> Option<&Path> {
+        self.0.get(&kind).map(PathBuf::as_path)
+    }
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct CachedAssets {
+    ids: HashMap<String, Option<u32>>,
+    images: HashMap<u32, Images>,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+pub struct Assets {
+    ids: HashMap<String, u32>,
+    images: HashMap<u32, Images>,
+}
+
+impl Assets {
+    pub fn get_all(&self, name: &str) -> Cow<'_, Images> {
+        let Some(id) = self.ids.get(name) else {
+            return Cow::Owned(Images::default());
+        };
+
+        match self.images.get(id) {
+            Some(images) => Cow::Borrowed(images),
+            None => Cow::Owned(Images::default()),
+        }
+    }
+
+    pub fn get(&self, name: &str, kind: ImageKind) -> Option<&Path> {
+        let Some(id) = self.ids.get(name) else {
+            return None;
+        };
+
+        self.images
+            .get(id)
+            .and_then(|i| i.0.get(&kind))
+            .map(PathBuf::as_path)
+    }
+}
+
 fn ensure_steamgriddb_ids(
+    assets: &mut CachedAssets,
     token: &str,
-    cache_dir: &Path,
     config: &Brie,
-) -> Result<HashMap<String, u32>, Error> {
-    let steamgriddb_cache = cache_dir.join("steamgriddb_ids.json");
-
-    let mut cached_ids: HashMap<String, Option<u32>> = std::fs::read(&steamgriddb_cache)
-        .ok()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-        .unwrap_or_default();
-
+) -> HashMap<String, u32> {
     info!("Finding missing steamgriddb ids");
 
     // Find ids in steamgriddb for units missing it. Ideally it should append it to `brie.yaml`, but
@@ -210,7 +262,7 @@ fn ensure_steamgriddb_ids(
         .units
         .par_iter()
         .map(|(k, v)| (k, v.common()))
-        .filter(|(k, v)| !cached_ids.contains_key(*k) && v.steamgriddb_id.is_none())
+        .filter(|(k, v)| !assets.ids.contains_key(*k) && v.steamgriddb_id.is_none())
         .filter_map(
             |(k, v)| match autocomplete(token, v.name.as_ref().unwrap_or(k)) {
                 Ok(Some(id)) => Some((k, Some(id))),
@@ -224,20 +276,19 @@ fn ensure_steamgriddb_ids(
                 }
             },
         )
-        .map(|(k, v)| (k.to_owned(), v))
+        .map(|(k, id)| (k.to_owned(), id))
         .collect::<HashMap<_, _>>();
 
     if !found_ids.is_empty() {
         debug!("Found ids: {found_ids:?}");
-
-        cached_ids.extend(found_ids);
-        let cached_ids = serde_json::to_vec(&cached_ids)?;
-        std::fs::write(&steamgriddb_cache, cached_ids)?;
+        assets.ids.extend(found_ids);
     }
 
-    let cached_ids = cached_ids
-        .into_iter()
-        .filter_map(|(k, v)| v.map(|v| (k, v)));
+    // Merge cached ids with ids defined in the unit file
+    let cached_ids = assets
+        .ids
+        .iter()
+        .filter_map(|(k, v)| v.map(|v| (k.clone(), v)));
 
     let mut predefined_ids = config
         .units
@@ -247,81 +298,100 @@ fn ensure_steamgriddb_ids(
         .collect::<HashMap<_, _>>();
 
     predefined_ids.extend(cached_ids);
-
-    Ok(predefined_ids)
+    predefined_ids
 }
 
 fn ensure_images_exist(
+    assets: &mut CachedAssets,
+    id_map: &HashMap<String, u32>,
     token: &str,
     cache_dir: &Path,
-    id_map: HashMap<String, u32>,
-) -> HashMap<String, Images> {
+) {
     let _ = std::fs::create_dir_all(cache_dir.join("images"));
 
-    let ids: HashSet<_> = id_map.values().copied().collect();
-    let paths: HashMap<_, _> = ids
+    let ids = id_map
+        .iter()
+        .map(|(name, id)| (id, (name, assets.images.get(id))))
+        .collect::<HashMap<_, _>>();
+    let paths = ids
         .par_iter()
-        .cloned()
-        .flat_map(|id| ImageKind::all().map(|kind| (id, kind)))
+        .flat_map(|(&&id, &name)| ImageKind::all().map(|kind| (id, name, kind)))
         .into_par_iter()
-        .filter_map(|(id, kind)| {
-            let path = cache_dir.join("images").join(format!("{id}-{kind}.png"));
-            if path.exists() {
-                return Some(((id, kind), path));
+        .filter_map(|(id, (name, cache), kind)| {
+            if let Some(cached) = cache.and_then(|c| c.0.get(&kind)) {
+                if cached.exists() {
+                    return Some(((id, kind), cached.clone()));
+                }
             }
 
-            match image(token, kind, id) {
+            let path = cache_dir.join("images").join(format!("{id}-{kind}"));
+            match image(token, kind, id, name) {
                 Ok(Some(img)) => {
-                    std::fs::write(&path, img).unwrap();
+                    let ext = match image::guess_format(&img) {
+                        Ok(ImageFormat::Jpeg) => "jpg",
+                        Ok(ImageFormat::Png) => "png",
+                        // TODO: handle this case
+                        format => {
+                            warn!("Unknown image format: {format:?}");
+                            "png"
+                        }
+                    };
+
+                    let path = path.with_extension(ext);
+
+                    // TODO: error handling?
+                    let _ = std::fs::write(&path, img);
                     Some(((id, kind), path))
                 }
                 Ok(None) => {
-                    warn!("No image found for id {id}");
+                    warn!("No `{kind}` image found for id {id} ({name})");
                     None
                 }
                 Err(e) => {
-                    error!("Failed to download image for id {id}: {e}");
+                    error!("Failed to download `{kind}` image for id {id} ({name}): {e}");
                     None
                 }
             }
         })
-        .collect();
+        .collect::<HashMap<_, _>>();
 
-    id_map
-        .into_iter()
-        .map(|(key, id)| {
-            (
-                key,
-                Images(
-                    ImageKind::all()
-                        .iter()
-                        .filter_map(|&kind| paths.get(&(id, kind)).map(|p| (kind, p.clone())))
-                        .collect(),
-                ),
-            )
-        })
-        .collect()
-}
-
-#[derive(Default, Clone)]
-pub struct Images(HashMap<ImageKind, PathBuf>);
-
-impl Images {
-    pub fn get(&self, kind: ImageKind) -> Option<&PathBuf> {
-        self.0.get(&kind)
+    for ((id, kind), path) in paths {
+        assets.images.entry(id).or_default().0.insert(kind, path);
     }
 }
 
-pub fn download_all(cache_dir: &Path, config: &Brie) -> Result<HashMap<String, Images>, Error> {
-    let Some(token) = config.steamgriddb_token.as_ref() else {
-        warn!("steamgriddb_token is not defined in the config");
-        return Ok(HashMap::default());
-    };
-
+pub fn download_all(cache_dir: &Path, config: &Brie) -> Result<Assets, Error> {
     info!("Downloading banners and icons from steamgriddb");
     let _ = std::fs::create_dir_all(cache_dir);
-    let id_map = ensure_steamgriddb_ids(token, cache_dir, config)?;
-    Ok(ensure_images_exist(token, cache_dir, id_map))
+
+    let asset_cache = cache_dir.join("assets.json");
+    let mut assets: CachedAssets = std::fs::read(&asset_cache)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        .unwrap_or_default();
+
+    let Some(token) = config.steamgriddb_token.as_ref() else {
+        warn!("steamgriddb_token is not defined in the config");
+        return Ok(Assets {
+            ids: assets
+                .ids
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k, v)))
+                .collect(),
+            images: assets.images,
+        });
+    };
+
+    let id_map = ensure_steamgriddb_ids(&mut assets, token, config);
+    ensure_images_exist(&mut assets, &id_map, token, cache_dir);
+
+    let cached_ids = serde_json::to_vec(&assets)?;
+    std::fs::write(&asset_cache, cached_ids)?;
+
+    Ok(Assets {
+        ids: id_map,
+        images: assets.images,
+    })
 }
 
 #[cfg(test)]
@@ -345,9 +415,13 @@ mod tests {
 
     #[test]
     pub fn test_banners() {
-        let res = image(TOKEN, ImageKind::Grid, 4265).unwrap().unwrap();
+        let res = image(TOKEN, ImageKind::Grid, 4265, "game")
+            .unwrap()
+            .unwrap();
         assert!(res == std::fs::read("tests/grid.png").unwrap());
-        let res = image(TOKEN, ImageKind::Icon, 4265).unwrap().unwrap();
+        let res = image(TOKEN, ImageKind::Icon, 4265, "game")
+            .unwrap()
+            .unwrap();
         assert!(res == std::fs::read("tests/icon.png").unwrap());
     }
 

@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     env::VarError,
     io,
     path::{Path, PathBuf},
@@ -10,7 +9,7 @@ use log::info;
 use serde::{Deserialize, Serialize};
 use shellexpand::LookupError;
 
-use crate::assets::{ImageKind, Images};
+use crate::assets::{Assets, ImageKind};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -41,7 +40,7 @@ pub struct Config {
     pub rest: serde_json::Value,
 }
 
-pub fn update(exe: &str, images: &HashMap<String, Images>, config: &Brie) -> Result<(), Error> {
+pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     let Some(sunshine_path) = config.paths.sunshine.as_ref() else {
         info!("Sunshine path not provided, skipping sunshine generation");
         return Ok(());
@@ -73,7 +72,7 @@ pub fn update(exe: &str, images: &HashMap<String, Images>, config: &Brie) -> Res
             name: unit.name.as_ref().unwrap_or(k).clone(),
             output: String::default(),
             cmd: format!("{exe} {k}"),
-            image_path: images.get(k).and_then(|i| i.get(ImageKind::Grid).cloned()),
+            image_path: assets.get(k, ImageKind::Grid).map(Path::to_path_buf),
             rest: serde_json::Value::Object(serde_json::Map::default()),
         })
         .for_each(|app| sunshine_config.apps.push(app));
