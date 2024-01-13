@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::HashSet,
+    collections::BTreeSet,
     fs,
     io::{self, Write},
     path::{Path, PathBuf},
@@ -125,26 +125,18 @@ pub enum CopyError {
 }
 
 #[derive(Debug, Error)]
-#[error(transparent)]
-pub struct OverrideError(#[from] io::Error);
-
-#[derive(Debug, Error)]
-pub enum InstallLibraryError {
-    #[error("Copy error. {0}")]
-    Copy(#[from] CopyError),
-    #[error("Override error. {0}")]
-    Override(#[from] OverrideError),
-}
-
-#[derive(Debug, Error)]
 pub enum Error {
-    #[error("Install {0} library error. {1}")]
-    Library(&'static str, InstallLibraryError),
+    #[error("Error installing {0} library. {1}")]
+    Library(&'static str, CopyError),
+    #[error("Unable to override dlls. {0}")]
+    Reg(io::Error),
+    #[error("Unable to create reg file. Wine prefix is an invalid path.")]
+    InvalidPath,
     #[error("Unable to update state file. {0}")]
     StateWrite(io::Error),
 }
 
-impl<T> WithContext<Result<T, Error>, &'static str> for Result<T, InstallLibraryError> {
+impl<T> WithContext<Result<T, Error>, &'static str> for Result<T, CopyError> {
     fn context(self, context: &'static str) -> Result<T, Error> {
         self.map_err(|e| Error::Library(context, e))
     }
@@ -184,26 +176,6 @@ impl Runner {
         Ok(())
     }
 
-    fn override_dll(&self, arch: Arch, dll: &str) -> Result<(), OverrideError> {
-        debug!("Overriding {dll} to native in wine for {arch}");
-
-        let key = r"HKEY_CURRENT_USER\Software\Wine\DllOverrides";
-
-        let command = match arch {
-            Arch::X86 => "wine",
-            Arch::X64 => "wine64",
-        };
-
-        self.command(
-            command,
-            &["reg", "add", key, "/v", &dll, "/d", "native", "/f"],
-        )
-        .env("WINEDLLOVERRIDES", "winemenubuilder.exe,mscoree,mshtml=")
-        .status()?;
-
-        Ok(())
-    }
-
     fn install_dlls<'a>(
         &self,
         overrides: &mut Overrides<'a>,
@@ -211,19 +183,45 @@ impl Runner {
         path: &Path,
         arch: Arch,
         dlls: &[&'a str],
-    ) -> Result<(), InstallLibraryError> {
+    ) -> Result<(), CopyError> {
         for dll in dlls {
             self.copy_dll(path.join(dll), arch)?;
 
-            let dll = dll
-                .strip_suffix(".so")
-                .unwrap_or(dll)
-                .strip_suffix(".dll")
-                .unwrap_or(dll);
+            let dll = dll.strip_suffix(".so").unwrap_or(dll);
+            let dll = dll.strip_suffix(".dll").unwrap_or(dll);
+            overrides.insert(dll);
+        }
 
-            if !overrides.contains(arch, dll) {
-                self.override_dll(arch, dll)?;
-                overrides.insert(arch, dll);
+        Ok(())
+    }
+
+    fn install_library_dlls(
+        &self,
+        overrides: &mut Overrides,
+        library: Library,
+        path: &Path,
+    ) -> Result<(), CopyError> {
+        let o = overrides;
+        match library {
+            Library::Dxvk | Library::DxvkGplAsync => {
+                let dlls = &["d3d9.dll", "d3d10core.dll", "d3d11.dll", "dxgi.dll"];
+                self.install_dlls(o, &path.join("x64"), Arch::X64, dlls)?;
+                self.install_dlls(o, &path.join("x32"), Arch::X86, dlls)?;
+            }
+            Library::DxvkNvapi => {
+                self.install_dlls(o, &path.join("x64"), Arch::X64, &["nvapi64.dll"])?;
+                self.install_dlls(o, &path.join("x32"), Arch::X86, &["nvapi.dll"])?;
+            }
+            Library::Vkd3dProton => {
+                let dlls = &["d3d12.dll", "d3d12core.dll"];
+                self.install_dlls(o, &path.join("x64"), Arch::X64, dlls)?;
+                self.install_dlls(o, &path.join("x86"), Arch::X86, dlls)?;
+            }
+            Library::NvidiaLibs => {
+                let libs = path.join("lib64").join("wine").join("x86_64-unix");
+                self.install_dlls(o, &libs, Arch::X64, &["nvcuda.dll.so", "nvoptix.dll.so"])?;
+                let libs = path.join("lib").join("wine").join("i386-unix");
+                self.install_dlls(o, &libs, Arch::X86, &["nvcuda.dll.so"])?;
             }
         }
 
@@ -235,38 +233,11 @@ impl Runner {
         let overrides = fs::read_to_string(&overrides_file).unwrap_or_default();
         let mut overrides = Overrides::new(&overrides);
 
-        let mut install = |library: Library, path: &Path| {
-            let o = &mut overrides;
-            match library {
-                Library::Dxvk | Library::DxvkGplAsync => {
-                    let dlls = &["d3d9.dll", "d3d10core.dll", "d3d11.dll", "dxgi.dll"];
-                    self.install_dlls(o, &path.join("x64"), Arch::X64, dlls)?;
-                    self.install_dlls(o, &path.join("x32"), Arch::X86, dlls)?;
-                }
-                Library::DxvkNvapi => {
-                    self.install_dlls(o, &path.join("x64"), Arch::X64, &["nvapi64.dll"])?;
-                    self.install_dlls(o, &path.join("x32"), Arch::X86, &["nvapi.dll"])?;
-                }
-                Library::Vkd3dProton => {
-                    let dlls = &["d3d12.dll", "d3d12core.dll"];
-                    self.install_dlls(o, &path.join("x64"), Arch::X64, dlls)?;
-                    self.install_dlls(o, &path.join("x86"), Arch::X86, dlls)?;
-                }
-                Library::NvidiaLibs => {
-                    let libs = path.join("lib64").join("wine").join("x86_64-unix");
-                    self.install_dlls(o, &libs, Arch::X64, &["nvcuda.dll.so", "nvoptix.dll.so"])?;
-                    let libs = path.join("lib").join("wine").join("i386-unix");
-                    self.install_dlls(o, &libs, Arch::X86, &["nvcuda.dll.so"])?;
-                }
-            }
-
-            Ok::<_, InstallLibraryError>(())
-        };
-
         for (library, path) in libraries {
             let name = library.name();
             info!("Copying library {name} dlls from {:?}", path.display());
-            install(*library, path).context(name)?;
+            self.install_library_dlls(&mut overrides, *library, path)
+                .context(name)?;
         }
 
         if let Ok(path) = dl::find_dl_path("libGLX_nvidia.so.0") {
@@ -276,16 +247,12 @@ impl Runner {
 
             let dll = path.join("nvngx.dll");
             if dll.exists() {
-                self.copy_dll(&dll, Arch::X64)
-                    .map_err(InstallLibraryError::from)
-                    .context("nvngx")?;
+                self.copy_dll(&dll, Arch::X64).context("nvngx")?;
             }
 
             let dll = path.join("_nvngx.dll");
             if dll.exists() {
-                self.copy_dll(&dll, Arch::X64)
-                    .map_err(InstallLibraryError::from)
-                    .context("nvngx")?;
+                self.copy_dll(&dll, Arch::X64).context("nvngx")?;
             }
         }
 
@@ -293,14 +260,23 @@ impl Runner {
             return Ok(());
         }
 
+        debug!("Overriding dlls: {:?}", overrides.new);
+        let reg = self.wine_prefix().join("dlls.reg");
+        let reg = reg.to_str().ok_or(Error::InvalidPath)?;
+        fs::write(reg, overrides.reg()).map_err(Error::Reg)?;
+        self.command("wine", &["regedit", reg])
+            .status()
+            .map_err(Error::Reg)?;
+        let _ = fs::remove_file(reg).map_err(Error::Reg);
+
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create(true)
             .open(&overrides_file)
             .map_err(Error::StateWrite)?;
 
-        for (arch, dll) in overrides.new {
-            writeln!(file, "{arch} {dll}").map_err(Error::StateWrite)?;
+        for dll in overrides.new {
+            writeln!(file, "{dll}").map_err(Error::StateWrite)?;
         }
 
         Ok(())
@@ -326,32 +302,36 @@ pub fn mut_env(library: Library, path: &Path, env: &mut IndexMap<String, String>
 }
 
 struct Overrides<'a> {
-    all: HashSet<(Arch, &'a str)>,
-    new: HashSet<(Arch, &'a str)>,
+    all: BTreeSet<&'a str>,
+    new: BTreeSet<&'a str>,
 }
 
 impl<'a> Overrides<'a> {
     fn new(existing: &'a str) -> Self {
         Self {
-            all: existing
-                .lines()
-                .map(|line| line.split_whitespace())
-                .filter_map(|mut s| match (s.next(), s.next()) {
-                    (Some(arch), Some(dll)) => Some((arch, dll)),
-                    _ => None,
-                })
-                .filter_map(|(arch, dll)| arch.parse().ok().map(|a| (a, dll)))
-                .collect(),
-            new: HashSet::new(),
+            all: existing.lines().collect(),
+            new: BTreeSet::new(),
         }
     }
 
-    fn contains(&self, arch: Arch, dll: &str) -> bool {
-        self.all.contains(&(arch, dll))
+    fn insert(&mut self, dll: &'a str) {
+        if !self.all.contains(dll) {
+            self.all.insert(dll);
+            self.new.insert(dll);
+        }
     }
 
-    fn insert(&mut self, arch: Arch, dll: &'a str) {
-        self.all.insert((arch, dll));
-        self.new.insert((arch, dll));
+    fn reg(&self) -> String {
+        let mut reg = String::from(
+            "Windows Registry Editor Version 5.00\n\n\
+            [HKEY_CURRENT_USER\\Software\\Wine\\DllOverrides]\n",
+        );
+
+        for dll in &self.new {
+            reg.push('"');
+            reg.push_str(dll);
+            reg.push_str("\"=\"native\"\n");
+        }
+        reg
     }
 }
