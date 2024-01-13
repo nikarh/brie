@@ -5,11 +5,11 @@ use indexmap::IndexMap;
 
 pub use launch::{launch, Error};
 
-pub use dll::{CopyError, Error as DllError, InstallLibraryError, OverrideError};
+pub use brie_download::mp;
+pub use dll::{CopyError, Error as DllError};
 pub use downloader::Error as DownloadError;
 pub use prepare::{BeforeError, MountsError, WinePrefixError, WinetricksError};
 pub use runtime::Error as RuntimeError;
-pub use brie_download::mp;
 
 mod command;
 mod dll;
