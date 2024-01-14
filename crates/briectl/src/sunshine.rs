@@ -24,9 +24,16 @@ pub enum Error {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct App {
+    #[serde(default)]
     pub name: String,
-    pub output: String,
-    pub cmd: String,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cmd: Option<String>,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub image_path: Option<PathBuf>,
 
     #[serde(flatten)]
@@ -61,7 +68,9 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
 
     // Retain foreign entries
     // FIXME: find a better way to do this
-    sunshine_config.apps.retain(|a| !a.cmd.contains("brie "));
+    sunshine_config
+        .apps
+        .retain(|a| !a.cmd.as_deref().map_or(false, |cmd| cmd.contains("brie ")));
 
     config
         .units
@@ -70,8 +79,8 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
         .filter(|(_, unit)| unit.generate.sunshine)
         .map(|(k, unit)| App {
             name: unit.name.as_ref().unwrap_or(k).clone(),
-            output: String::default(),
-            cmd: format!("{exe} {k}"),
+            output: None,
+            cmd: Some(format!("{exe} {k}")),
             image_path: assets.get(k, ImageKind::Grid).map(Path::to_path_buf),
             rest: serde_json::Value::Object(serde_json::Map::default()),
         })
@@ -83,4 +92,18 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     std::fs::write(sunshine_path, sunshine_apps)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Config;
+
+    #[test]
+    fn serialization() {
+        let src = r#"{"apps":[{"name":"test","bad":1}],"env":{}}"#;
+        let json: Config = serde_json::from_str(src).unwrap();
+        let json = serde_json::to_string(&json).unwrap();
+
+        assert_eq!(json, src);
+    }
 }
