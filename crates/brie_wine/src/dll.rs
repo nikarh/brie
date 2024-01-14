@@ -241,18 +241,12 @@ impl Runner {
         }
 
         if let Ok(path) = dl::find_dl_path("libGLX_nvidia.so.0") {
-            info!("Copying system nvngx dlls");
-
             let path = Path::new(&path).join("nvidia").join("wine");
-
-            let dll = path.join("nvngx.dll");
-            if dll.exists() {
-                self.copy_dll(&dll, Arch::X64).context("nvngx")?;
-            }
-
-            let dll = path.join("_nvngx.dll");
-            if dll.exists() {
-                self.copy_dll(&dll, Arch::X64).context("nvngx")?;
+            if path.exists() {
+                info!("Copying system nvngx dlls");
+                let dlls = &["nvngx.dll", "_nvngx.dll"];
+                self.install_dlls(&mut overrides, &path, Arch::X64, dlls)
+                    .context("nvngx")?;
             }
         }
 
