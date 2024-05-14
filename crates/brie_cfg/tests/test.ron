@@ -1,5 +1,5 @@
 Brie {
-    steamgriddb_token: None,
+    tokens: None,
     paths: Paths {
         steam_config: None,
         sunshine: None,

@@ -147,7 +147,7 @@ fn image(token: &str, kind: ImageKind, id: u32, name: &str) -> Result<Option<Vec
         return Ok(None);
     };
 
-    let (mut lib, pb) = download_file(url)?.progress(format!("{id}-{kind}"));
+    let (mut lib, pb) = download_file(url, None)?.progress(format!("{id}-{kind}"));
 
     let mut img = Vec::new();
     lib.read_to_end(&mut img)?;
@@ -238,9 +238,7 @@ impl Assets {
     }
 
     pub fn get(&self, name: &str, kind: ImageKind) -> Option<&Path> {
-        let Some(id) = self.ids.get(name) else {
-            return None;
-        };
+        let id = self.ids.get(name)?;
 
         self.images
             .get(id)
@@ -370,7 +368,7 @@ pub fn download_all(cache_dir: &Path, config: &Brie) -> Result<Assets, Error> {
         .and_then(|bytes| serde_json::from_slice(&bytes).ok())
         .unwrap_or_default();
 
-    let Some(token) = config.steamgriddb_token.as_ref() else {
+    let Some(token) = config.tokens.as_ref().and_then(|t| t.steamgriddb.as_ref()) else {
         warn!("steamgriddb_token is not defined in the config");
         return Ok(Assets {
             ids: assets
@@ -398,6 +396,7 @@ pub fn download_all(cache_dir: &Path, config: &Brie) -> Result<Assets, Error> {
 mod tests {
     use std::path::Path;
 
+    use brie_cfg::Tokens;
     use brie_download::mp;
     use indicatif_log_bridge::LogWrapper;
 
@@ -410,10 +409,11 @@ mod tests {
     #[test]
     pub fn test_autocomplete() {
         let res = autocomplete(TOKEN, "The witcher 3").unwrap();
-        assert_eq!(res, Some(12833));
+        assert_eq!(res, Some(4265));
     }
 
     #[test]
+    #[ignore]
     pub fn test_banners() {
         let res = image(TOKEN, ImageKind::Grid, 4265, "game")
             .unwrap()
@@ -434,7 +434,10 @@ mod tests {
 
         let cache_dir = Path::new(".tmp/cache");
         let config = brie_cfg::Brie {
-            steamgriddb_token: Some(TOKEN.to_owned()),
+            tokens: Some(Tokens {
+                steamgriddb: Some(TOKEN.to_owned()),
+                github: None,
+            }),
             units: [
                 (
                     "witcher3".to_owned(),

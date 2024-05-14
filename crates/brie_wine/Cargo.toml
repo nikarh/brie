@@ -33,6 +33,7 @@ flate2.workspace = true
 xz2.workspace = true
 tar.workspace = true
 zstd.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 indicatif-log-bridge.workspace = true

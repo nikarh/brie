@@ -37,6 +37,7 @@ The project provides two CLI tools.
 - Before launching the unit, the tool:
   - Downloads optional dependencies with their corresponding versions defined for the unit:
     - [wine-ge-custom](https://github.com/GloriousEggroll/wine-ge-custom)
+    - [wine-tkg](https://github.com/Frogging-Family/wine-tkg-git)
     - [dxvk](https://github.com/doitsujin/dxvk)
     - [dxvk-gplasync](https://gitlab.com/Ph42oN/dxvk-gplasync)
     - [dxvk-nvapi](https://github.com/jp7677/dxvk-nvapi)
@@ -77,7 +78,7 @@ Most commonly it would be:
 ```yaml
 x-wine-defaults: &wine-defaults
   runtime:
-    kind: ge-proton
+    kind: ge-proton # Can be "ge-proton", "tkg" (requires github PAT), or "system"
     version: "*"
   libraries:
     dxvk-nvapi: "*"
@@ -110,7 +111,9 @@ x-wine-soft-defaults: &wine-soft-defaults
     desktop: true
     steam_shortcut: false
 
-steamgriddb_token: PLACE_YOUR_TOKEN_HERE
+tokens:
+  steamgriddb: YOUR_STEAMGRIDDB_TOKEN
+  github: GITHUB_PAT # Used to download wine-tkg artifacts from Github Actions
 
 paths:
   steam_config: ~/.var/app/com.valvesoftware.Steam/.local/share/Steam/userdata/{YOUR_ID}/config

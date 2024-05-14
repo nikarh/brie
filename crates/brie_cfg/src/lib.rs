@@ -6,10 +6,17 @@ use serde_with::{formats::PreferOne, serde_as, OneOrMany};
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Brie {
-    pub steamgriddb_token: Option<String>,
+    pub tokens: Option<Tokens>,
+
     #[serde(default)]
     pub paths: Paths,
     pub units: IndexMap<String, Unit>,
+}
+
+#[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Tokens {
+    pub steamgriddb: Option<String>,
+    pub github: Option<String>,
 }
 
 #[derive(Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -36,6 +43,16 @@ pub enum ReleaseVersion {
     Latest,
     #[serde(untagged)]
     Tag(String),
+}
+
+impl ReleaseVersion {
+    #[must_use]
+    pub fn to_str(&self) -> &str {
+        match self {
+            Self::Latest => "latest",
+            Self::Tag(tag) => tag,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -113,6 +130,7 @@ pub struct NativeUnit {
 pub enum Runtime {
     System { path: Option<PathBuf> },
     GeProton { version: ReleaseVersion },
+    Tkg { version: ReleaseVersion },
 }
 
 impl Default for Runtime {

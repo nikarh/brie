@@ -4,6 +4,7 @@ use brie_download::TlsError;
 pub mod github;
 pub mod gitlab;
 
+#[derive(Clone, Copy)]
 pub struct GitRepo<'a> {
     pub owner: &'a str,
     pub repo: &'a str,
@@ -38,8 +39,4 @@ pub enum Error {
     ReleaseParse(#[from] std::io::Error),
     #[error("No asset matching predicate found.")]
     NoMatchingAsset,
-}
-
-pub trait ReleaseProvider {
-    fn get_release(&self, repo: &GitRepo<'_>, version: &ReleaseVersion) -> Result<Release, Error>;
 }

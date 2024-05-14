@@ -1,8 +1,8 @@
 use std::{path::Path, time::Duration};
 
-use brie_cfg::Runtime;
+use brie_cfg::{Runtime, Tokens};
 
-use crate::library::{self, ensure_library_exists, WineGe};
+use crate::library::{self, ensure_library_exists, WineGe, WineTkg};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -18,6 +18,7 @@ pub enum Error {
 ///
 /// In case of success returns a full path to wine binary.
 pub fn ensure_runtime_exists(
+    tokens: &Tokens,
     library_dir: impl AsRef<Path>,
     runtime: &Runtime,
     time_since_update: Option<Duration>,
@@ -27,8 +28,17 @@ pub fn ensure_runtime_exists(
         Runtime::System { path: Some(path) } => {
             library::State::untouched(which::which(path.join("wine"))?)
         }
+        Runtime::Tkg { version } => {
+            let state =
+                ensure_library_exists(&WineTkg, library_dir, tokens, version, time_since_update)?;
+            library::State {
+                path: state.path.join("usr").join("bin").join("wine"),
+                updated: state.updated,
+            }
+        }
         Runtime::GeProton { version } => {
-            let state = ensure_library_exists(&WineGe, library_dir, version, time_since_update)?;
+            let state =
+                ensure_library_exists(&WineGe, library_dir, tokens, version, time_since_update)?;
             library::State {
                 path: state.path.join("bin").join("wine"),
                 updated: state.updated,
