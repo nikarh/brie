@@ -2,7 +2,7 @@ use brie_download::ureq;
 use log::info;
 use serde::Deserialize;
 
-use super::{Error, GitRepo, Release, ReleaseProvider, ReleaseVersion};
+use super::{Error, GitRepo, Release, ReleaseVersion};
 
 #[derive(Deserialize, Debug)]
 pub struct GlFile {
@@ -10,32 +10,21 @@ pub struct GlFile {
     pub path: String,
 }
 
-pub struct Gitlab<'a, E> {
-    pub tree_path: &'a str,
-    pub version_extractor: E,
-}
+pub struct Client;
 
-impl<'a, E> Gitlab<'a, E>
-where
-    E: for<'b> Fn(&'b str) -> Option<&'b str>,
-{
-    pub fn new(tree_path: &'a str, version_extractor: E) -> Self {
-        Self {
-            tree_path,
-            version_extractor,
-        }
-    }
-}
-
-impl<'a, E> ReleaseProvider for Gitlab<'a, E>
-where
-    E: for<'b> Fn(&'b str) -> Option<&'b str>,
-{
-    fn get_release(&self, repo: &GitRepo<'_>, version: &ReleaseVersion) -> Result<Release, Error> {
+impl Client {
+    #[allow(clippy::unused_self)]
+    pub fn tree_file(
+        &self,
+        repo: GitRepo<'_>,
+        version: &ReleaseVersion,
+        tree_path: &str,
+        version_extractor: impl for<'b> Fn(&'b str) -> Option<&'b str>,
+    ) -> Result<Release, Error> {
         let url = format!(
             "https://gitlab.com/api/v4/projects/{repo}/repository/tree?path={tree_path}",
             repo = format!("{repo}").replace('/', "%2F"),
-            tree_path = self.tree_path.replace('/', "%2F")
+            tree_path = tree_path.replace('/', "%2F")
         );
 
         info!("Downloading {version:?} release metadata from {}", url);
@@ -54,7 +43,7 @@ where
         };
 
         let release = release.ok_or(Error::NoMatchingAsset)?;
-        let version = (self.version_extractor)(&release.name)
+        let version = version_extractor(&release.name)
             .ok_or(Error::NoMatchingAsset)?
             .to_owned();
         let filename = release.name;
@@ -73,6 +62,7 @@ where
     }
 }
 
+/// A simple prefix+suffix file name based version extractor
 pub fn filename_version<'a>(
     prefix: &'a str,
     suffix: &'a str,
@@ -87,21 +77,26 @@ pub fn filename_version<'a>(
 #[cfg(test)]
 mod test {
     use crate::downloader::{
-        gitlab::{filename_version, Gitlab},
-        GitRepo, ReleaseProvider, ReleaseVersion,
+        gitlab::{filename_version, Client},
+        GitRepo, ReleaseVersion,
     };
 
     #[test]
     fn download_dxvk_async() {
         let repo = GitRepo::new("Ph42oN", "dxvk-gplasync");
+        let tree_path = "releases";
+        let extractor = || filename_version("dxvk-gplasync-", ".tar.gz");
 
-        let downloader = Gitlab::new("releases", filename_version("dxvk-gplasync-", ".tar.gz"));
-
-        let latest = downloader
-            .get_release(&repo, &ReleaseVersion::Latest)
+        let latest = Client
+            .tree_file(repo, &ReleaseVersion::Latest, tree_path, extractor())
             .unwrap();
-        let older = downloader
-            .get_release(&repo, &ReleaseVersion::Tag("v2.1-3".into()))
+        let older = Client
+            .tree_file(
+                repo,
+                &ReleaseVersion::Tag("v2.1-3".into()),
+                tree_path,
+                extractor(),
+            )
             .unwrap();
 
         assert_ne!(latest.version, "v2.1-3");

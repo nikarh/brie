@@ -266,6 +266,7 @@ impl Runner {
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&overrides_file)
             .map_err(Error::StateWrite)?;
 

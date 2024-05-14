@@ -109,6 +109,7 @@ impl Runner {
         let mut file = fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&file)
             .map_err(WinetricksError::Lock)?;
 

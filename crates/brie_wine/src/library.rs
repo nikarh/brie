@@ -1,12 +1,12 @@
 use std::{
     fs::{self, File, Permissions},
-    io::{self},
+    io::{self, Cursor, Read},
     os::unix::{self, fs::PermissionsExt},
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use brie_cfg::{Library, ReleaseVersion};
+use brie_cfg::{Library, ReleaseVersion, Tokens};
 use brie_download::download_file;
 use flate2::read::GzDecoder;
 use log::{debug, error, info};
@@ -17,9 +17,9 @@ use zstd::stream::Decoder as ZstDecoder;
 
 use crate::downloader::{
     self,
-    github::{with_suffix, Github},
-    gitlab::{filename_version, Gitlab},
-    GitRepo, ReleaseProvider,
+    github::{self, with_suffix},
+    gitlab::{self, filename_version},
+    GitRepo,
 };
 
 #[derive(Error, Debug)]
@@ -32,21 +32,36 @@ pub enum Error {
     Http(#[from] Box<ureq::Error>),
     #[error("IO error. {0}")]
     Io(#[from] std::io::Error),
+    #[error("ZIP error. {0}")]
+    Zip(#[from] zip::result::ZipError),
     #[error("Unknown library archive format for file {0}.")]
     UnknownFormat(String),
 }
 
 pub trait Downloadable {
+    /// Folder name where the artifact will be saved to
     fn name(&self) -> &'static str;
 
+    /// Used to strip the directory from the archive
     fn substring(&self) -> &'static str {
         self.name()
     }
 
-    fn get_release(
+    /// Get download link for the given release version.
+    /// Also returns the resolved release version (e.g. for "latest")
+    fn get_meta(
         &self,
+        tokens: &Tokens,
         version: &ReleaseVersion,
     ) -> Result<downloader::Release, downloader::Error>;
+
+    /// Downloads the artifacts and unpacks it to dir.
+    fn download(
+        &self,
+        tokens: &Tokens,
+        release: &downloader::Release,
+        dest: &Path,
+    ) -> Result<(), Error>;
 }
 
 pub struct WineGe;
@@ -60,12 +75,93 @@ impl Downloadable for WineGe {
         "GE-Proton"
     }
 
-    fn get_release(
+    fn get_meta(
         &self,
+        tokens: &Tokens,
         version: &ReleaseVersion,
     ) -> Result<downloader::Release, downloader::Error> {
-        Github::new(with_suffix(".tar.xz"))
-            .get_release(&GitRepo::new("GloriousEggroll", "wine-ge-custom"), version)
+        github::Client::new(tokens.github.as_deref()).release(
+            GitRepo::new("GloriousEggroll", "wine-ge-custom"),
+            version,
+            with_suffix(".tar.xz"),
+        )
+    }
+
+    fn download(
+        &self,
+        tokens: &Tokens,
+        release: &downloader::Release,
+        dest: &Path,
+    ) -> Result<(), Error> {
+        let authorization = tokens.github.as_ref().map(|t| format!("Bearer {t}"));
+
+        let (lib, pb) =
+            download_file(&release.url, authorization.as_deref())?.progress(self.name());
+
+        match &release.filename {
+            n if n.ends_with(".tar.gz") => untar(GzDecoder::new(lib), dest)?,
+            n if n.ends_with(".tar.xz") => untar(XzDecoder::new(lib), dest)?,
+            n if n.ends_with(".tar.zst") => untar(ZstDecoder::new(lib)?, dest)?,
+            _ => {
+                return Err(Error::UnknownFormat(release.filename.to_string()));
+            }
+        }
+
+        pb.finish();
+
+        Ok(())
+    }
+}
+
+pub struct WineTkg;
+
+impl Downloadable for WineTkg {
+    fn name(&self) -> &'static str {
+        "wine-tkg"
+    }
+
+    fn get_meta(
+        &self,
+        tokens: &Tokens,
+        version: &ReleaseVersion,
+    ) -> Result<downloader::Release, downloader::Error> {
+        #[allow(clippy::unreadable_literal)]
+        github::Client::new(tokens.github.as_deref()).workflow_artifact(
+            GitRepo::new("Frogging-Family", "wine-tkg-git"),
+            version,
+            11219483, // Wine Arch Linux CI
+            with_suffix("wine-tkg-build"),
+        )
+    }
+
+    fn download(
+        &self,
+        tokens: &Tokens,
+        release: &downloader::Release,
+        dest: &Path,
+    ) -> Result<(), Error> {
+        let authorization = tokens.github.as_ref().map(|t| format!("Bearer {t}"));
+
+        let (mut lib, pb) =
+            download_file(&release.url, authorization.as_deref())?.progress(self.name());
+
+        let buf = {
+            let mut buf = Vec::new();
+            lib.read_to_end(&mut buf)?;
+            let mut zip = Cursor::new(buf);
+            let mut zip = zip::ZipArchive::new(&mut zip)?;
+            let mut tar_zst = zip.by_index(0)?;
+            #[allow(clippy::cast_possible_truncation)]
+            let mut buf = Vec::with_capacity(tar_zst.size() as usize);
+            tar_zst.read_to_end(&mut buf)?;
+            buf
+        };
+
+        untar(ZstDecoder::new(Cursor::new(buf))?, dest)?;
+
+        pb.finish();
+
+        Ok(())
     }
 }
 
@@ -80,26 +176,69 @@ impl Downloadable for Library {
         }
     }
 
-    fn get_release(
+    fn get_meta(
         &self,
+        tokens: &Tokens,
         version: &ReleaseVersion,
     ) -> Result<downloader::Release, downloader::Error> {
         match self {
-            Library::Dxvk => {
-                Github::new(|a| a.name.ends_with(".tar.gz") && !a.name.contains("sniper"))
-                    .get_release(&GitRepo::new("doitsujin", "dxvk"), version)
-            }
-            Library::DxvkGplAsync => {
-                Gitlab::new("releases", filename_version("dxvk-gplasync-", ".tar.gz"))
-                    .get_release(&GitRepo::new("Ph42oN", "dxvk-gplasync"), version)
-            }
-            Library::DxvkNvapi => Github::new(with_suffix(".tar.gz"))
-                .get_release(&GitRepo::new("jp7677", "dxvk-nvapi"), version),
-            Library::Vkd3dProton => Github::new(with_suffix(".tar.zst"))
-                .get_release(&GitRepo::new("HansKristian-Work", "vkd3d-proton"), version),
-            Library::NvidiaLibs => Github::new(with_suffix(".tar.xz"))
-                .get_release(&GitRepo::new("SveSop", "nvidia-libs"), version),
+            Library::Dxvk => github::Client::new(tokens.github.as_deref()).release(
+                GitRepo::new("doitsujin", "dxvk"),
+                version,
+                |a| a.name.ends_with(".tar.gz") && !a.name.contains("sniper"),
+            ),
+            Library::DxvkGplAsync => gitlab::Client.tree_file(
+                GitRepo::new("Ph42oN", "dxvk-gplasync"),
+                version,
+                "releases",
+                filename_version("dxvk-gplasync-", ".tar.gz"),
+            ),
+            Library::DxvkNvapi => github::Client::new(tokens.github.as_deref()).release(
+                GitRepo::new("jp7677", "dxvk-nvapi"),
+                version,
+                with_suffix(".tar.gz"),
+            ),
+            Library::Vkd3dProton => github::Client::new(tokens.github.as_deref()).release(
+                GitRepo::new("HansKristian-Work", "vkd3d-proton"),
+                version,
+                with_suffix(".tar.zst"),
+            ),
+            Library::NvidiaLibs => github::Client::new(tokens.github.as_deref()).release(
+                GitRepo::new("SveSop", "nvidia-libs"),
+                version,
+                with_suffix(".tar.xz"),
+            ),
         }
+    }
+
+    fn download(
+        &self,
+        tokens: &Tokens,
+        release: &downloader::Release,
+        dest: &Path,
+    ) -> Result<(), Error> {
+        let authorization = match self {
+            Library::DxvkGplAsync => None,
+            Library::Dxvk | Library::DxvkNvapi | Library::NvidiaLibs | Library::Vkd3dProton => {
+                tokens.github.as_ref().map(|t| format!("Bearer {t}"))
+            }
+        };
+
+        let (lib, pb) =
+            download_file(&release.url, authorization.as_deref())?.progress(self.name());
+
+        match &release.filename {
+            n if n.ends_with(".tar.gz") => untar(GzDecoder::new(lib), dest)?,
+            n if n.ends_with(".tar.xz") => untar(XzDecoder::new(lib), dest)?,
+            n if n.ends_with(".tar.zst") => untar(ZstDecoder::new(lib)?, dest)?,
+            _ => {
+                return Err(Error::UnknownFormat(release.filename.to_string()));
+            }
+        }
+
+        pb.finish();
+
+        Ok(())
     }
 }
 
@@ -178,12 +317,12 @@ impl<'a> Drop for DirGuard<'a> {
 }
 
 fn download_library(
-    release: downloader::Release,
     library: &impl Downloadable,
-    library_dir: &Path,
-    version_dir: PathBuf,
     version: &ReleaseVersion,
-) -> Result<PathBuf, Error> {
+    release: &downloader::Release,
+    library_dir: &Path,
+    tokens: &Tokens,
+) -> Result<(), Error> {
     let name = library.name();
 
     info!("Downloading library {name} {version:?}: {release:?}");
@@ -194,30 +333,22 @@ fn download_library(
     // Auto-delete directory if extraction fails mid-way
     let mut guard = DirGuard::new(&dest);
 
-    let (lib, pb) = download_file(&release.url)?.progress(name);
-
-    match &release.filename {
-        n if n.ends_with(".tar.gz") => untar(GzDecoder::new(lib), &dest)?,
-        n if n.ends_with(".tar.xz") => untar(XzDecoder::new(lib), &dest)?,
-        n if n.ends_with(".tar.zst") => untar(ZstDecoder::new(lib)?, &dest)?,
-        _ => {
-            return Err(Error::UnknownFormat(release.filename));
-        }
-    }
-
-    pb.finish();
+    library.download(tokens, release, &dest)?;
 
     if let Some(dest) = contains_single_directory_with_substring(&dest, library.substring())? {
         move_paths_to_parent_directory(&dest)?;
     }
 
     if version == &ReleaseVersion::Latest {
-        _ = fs::remove_file(&version_dir);
-        unix::fs::symlink(&release.version, &version_dir)?;
+        let dir = library_dir.join("latest");
+
+        _ = fs::remove_file(&dir);
+        unix::fs::symlink(&release.version, &dir)?;
     }
 
     guard.success = true;
-    Ok(version_dir)
+
+    Ok(())
 }
 
 pub struct State {
@@ -238,6 +369,7 @@ impl State {
 pub fn ensure_library_exists(
     library: &impl Downloadable,
     library_dir: impl AsRef<Path>,
+    tokens: &Tokens,
     version: &ReleaseVersion,
     time_since_update: Option<Duration>,
 ) -> Result<State, Error> {
@@ -246,18 +378,14 @@ pub fn ensure_library_exists(
 
     info!("Checking library {name} {version:?}");
     let library_dir = library_dir.join(name);
-
-    let version_dir = library_dir.join(match version {
-        ReleaseVersion::Latest => "latest",
-        ReleaseVersion::Tag(tag) => tag,
-    });
+    let version_dir = library_dir.join(version.to_str());
 
     if version_dir.exists() {
         if matches!(version, ReleaseVersion::Latest)
             && time_since_update.map_or(true, |d| d > Duration::from_secs(86400))
         {
             info!("Checking latest release for {name} {version:?}");
-            let release = match library.get_release(version) {
+            let release = match library.get_meta(tokens, version) {
                 Ok(release) => release,
                 Err(err) => {
                     error!("Unable to check latest release for {name}: {err}");
@@ -265,6 +393,7 @@ pub fn ensure_library_exists(
                 }
             };
 
+            // Check symlink of the "latest" folder
             let latest_version = version_dir.read_link()?;
             let latest_version = latest_version.file_name().unwrap_or_default();
 
@@ -274,9 +403,7 @@ pub fn ensure_library_exists(
             }
 
             info!("Updating {name} to {}", release.version);
-            if let Err(err) =
-                download_library(release, library, &library_dir, version_dir.clone(), version)
-            {
+            if let Err(err) = download_library(library, version, &release, &library_dir, tokens) {
                 error!("Unable to update {name}: {err}");
             }
         }
@@ -285,10 +412,13 @@ pub fn ensure_library_exists(
     }
 
     debug!("Checking release for {name} {version:?}");
-    let release = library.get_release(version)?;
-    let path = download_library(release, library, &library_dir, version_dir, version)?;
+    let release = library.get_meta(tokens, version)?;
+    download_library(library, version, &release, &library_dir, tokens)?;
 
-    Ok(State::new(path, matches!(version, ReleaseVersion::Latest)))
+    Ok(State::new(
+        version_dir,
+        matches!(version, ReleaseVersion::Latest),
+    ))
 }
 
 pub fn ensure_winetricks_exists(cache_dir: impl AsRef<Path>) -> Result<(), Error> {
@@ -299,7 +429,7 @@ pub fn ensure_winetricks_exists(cache_dir: impl AsRef<Path>) -> Result<(), Error
 
     info!("Downloading winetricks");
     let url = "https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks";
-    let (mut read, pb) = download_file(url)?.progress("winetricks");
+    let (mut read, pb) = download_file(url, None)?.progress("winetricks");
 
     let _ = fs::create_dir_all(cache_dir.as_ref().join(".bin"));
     let mut file = File::create(target)?;
@@ -318,7 +448,7 @@ pub fn ensure_cabextract_exists(cache_dir: impl AsRef<Path>) -> Result<(), Error
 
     info!("Downloading cabextract");
     let url = "https://archlinux.org/packages/extra/x86_64/cabextract/download/";
-    let (read, pb) = download_file(url)?.progress("cabextract");
+    let (read, pb) = download_file(url, None)?.progress("cabextract");
 
     let _ = fs::create_dir_all(cache_dir.as_ref().join(".bin"));
     let mut tar = Archive::new(ZstDecoder::new(read)?);
@@ -341,7 +471,7 @@ pub fn ensure_cabextract_exists(cache_dir: impl AsRef<Path>) -> Result<(), Error
 mod test {
     use std::path::Path;
 
-    use brie_cfg::{Library, ReleaseVersion, Runtime};
+    use brie_cfg::{Library, ReleaseVersion, Runtime, Tokens};
     use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
     use crate::{library::ensure_library_exists, runtime::ensure_runtime_exists};
@@ -351,6 +481,11 @@ mod test {
     fn test_download() {
         let version = ReleaseVersion::Latest;
         let cache_dir = Path::new("./.tmp");
+
+        let tokens = Tokens {
+            github: Some(std::env::var("GITHUB_TOKEN").unwrap()),
+            ..Tokens::default()
+        };
 
         let libraries = [
             Library::Dxvk,
@@ -363,6 +498,7 @@ mod test {
         rayon::scope(|s| {
             s.spawn(|_| {
                 ensure_runtime_exists(
+                    &tokens,
                     cache_dir.join("wine"),
                     &Runtime::GeProton {
                         version: ReleaseVersion::Latest,
@@ -372,8 +508,20 @@ mod test {
                 .unwrap();
             });
 
+            s.spawn(|_| {
+                ensure_runtime_exists(
+                    &tokens,
+                    cache_dir.join("wine"),
+                    &Runtime::Tkg {
+                        version: ReleaseVersion::Latest,
+                    },
+                    None,
+                )
+                .unwrap();
+            });
+
             libraries.par_iter().for_each(|l| {
-                ensure_library_exists(l, cache_dir, &version, None).unwrap();
+                ensure_library_exists(l, cache_dir, &tokens, &version, None).unwrap();
             });
         });
 

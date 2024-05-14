@@ -35,8 +35,16 @@ pub enum Error {
     Ureq(#[from] Box<ureq::Error>),
 }
 
-pub fn download_file(url: &str) -> Result<DownloadStream<impl io::Read>, Error> {
-    let response = ureq()?.get(url).call().map_err(Box::new)?;
+pub fn download_file(
+    url: &str,
+    authorization: Option<&str>,
+) -> Result<DownloadStream<impl io::Read>, Error> {
+    let req = match authorization {
+        Some(header) => ureq()?.get(url).set("Authorization", header),
+        None => ureq()?.get(url),
+    };
+
+    let response = req.call().map_err(Box::new)?;
 
     let len = response
         .header("Content-Length")

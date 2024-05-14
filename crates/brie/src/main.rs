@@ -78,7 +78,7 @@ fn launch() -> Result<(), Error> {
         }
         brie_cfg::Unit::Wine(unit) => {
             let paths = Paths::new(&data_home);
-            let cfg = Unit {
+            let unit = Unit {
                 runtime: unit.runtime,
                 libraries: unit.libraries,
                 env: unit.common.env,
@@ -93,7 +93,7 @@ fn launch() -> Result<(), Error> {
                 wrapper: unit.common.wrapper,
             };
 
-            brie_wine::launch(&paths, cfg)?;
+            brie_wine::launch(&paths, &cfg.tokens.unwrap_or_default(), unit)?;
         }
     };
 

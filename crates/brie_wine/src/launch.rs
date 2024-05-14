@@ -1,5 +1,6 @@
 use std::{borrow::Cow, env::VarError, fs, io, path::Path};
 
+use brie_cfg::Tokens;
 use fslock::LockFile;
 use indexmap::IndexMap;
 use log::info;
@@ -57,7 +58,7 @@ impl<T> WithContext<Result<T, Error>, &'static str> for Result<T, library::Error
     }
 }
 
-pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
+pub fn launch(paths: &Paths, tokens: &Tokens, unit: Unit) -> Result<(), Error> {
     info!("Preparing to launch unit: {unit:#?}");
     info!("Paths: {paths:?}");
 
@@ -71,6 +72,7 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
     // Download all dependencies in parallel
     let (wine, winetricks, cabextract, libraries) = join!(
         || ensure_runtime_exists(
+            tokens,
             &paths.libraries,
             &unit.runtime,
             state.wine.and_then(|t| t.elapsed().ok())
@@ -84,6 +86,7 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
                     ensure_library_exists(
                         l,
                         &paths.libraries,
+                        tokens,
                         version,
                         state.libraries.get(l).and_then(|t| t.elapsed().ok()),
                     )
@@ -159,7 +162,7 @@ pub fn launch(paths: &Paths, unit: Unit) -> Result<(), Error> {
 mod tests {
     use std::path::Path;
 
-    use brie_cfg::{Library, ReleaseVersion, Runtime};
+    use brie_cfg::{Library, ReleaseVersion, Runtime, Tokens};
     use brie_download::mp;
     use indexmap::IndexMap;
     use indicatif_log_bridge::LogWrapper;
@@ -182,6 +185,10 @@ mod tests {
             &Paths {
                 libraries: Path::new(".tmp").join("libraries"),
                 prefixes: Path::new(".tmp").join("prefixes"),
+            },
+            &Tokens {
+                steamgriddb: None,
+                github: None,
             },
             Unit {
                 runtime: Runtime::GeProton {
