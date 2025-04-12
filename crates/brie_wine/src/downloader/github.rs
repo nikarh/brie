@@ -59,7 +59,7 @@ impl<'a> Client<'a> {
             }
         };
 
-        info!("Downloading {version:?} release metadata from {}", url);
+        info!("Downloading {version:?} release metadata from {url}");
 
         let mut req = ureq()?.get(&url).set("Accept", ACCEPT_HEADER);
         if let Some(token) = self.token {
@@ -91,7 +91,7 @@ impl<'a> Client<'a> {
         let run_id = match version {
             ReleaseVersion::Latest => {
                 let url = format!("https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/runs?status=success&per_page=1");
-                info!("Getting workflow run data from {}", url);
+                info!("Getting workflow run data from {url}");
                 let mut req = ureq()?.get(&url).set("Accept", ACCEPT_HEADER);
                 if let Some(token) = self.token {
                     req = req.set("Authorization", &format!("Bearer {token}"));
@@ -112,7 +112,7 @@ impl<'a> Client<'a> {
         // Get the workflow run
         let url = format!("https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts");
 
-        info!("Downloading {run_id:?} workflow run metadata from {}", url);
+        info!("Downloading {run_id:?} workflow run metadata from {url}");
         let mut req = ureq()?.get(&url).set("Accept", ACCEPT_HEADER);
         if let Some(token) = self.token {
             req = req.set("Authorization", &format!("Bearer {token}"));

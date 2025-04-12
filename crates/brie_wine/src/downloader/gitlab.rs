@@ -27,7 +27,7 @@ impl Client {
             tree_path = tree_path.replace('/', "%2F")
         );
 
-        info!("Downloading {version:?} release metadata from {}", url);
+        info!("Downloading {version:?} release metadata from {url}");
 
         let mut releases: Vec<GlFile> = ureq()?.get(&url).call().map_err(Box::new)?.into_json()?;
 

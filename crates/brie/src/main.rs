@@ -67,7 +67,7 @@ fn launch() -> Result<(), Error> {
         .ok_or_else(|| Error::NoUnitProvided(Units::new(&cfg.units)))?;
     let mut unit = cfg
         .units
-        .remove(&name)
+        .swap_remove(&name)
         .ok_or_else(|| Error::NotFound(name.clone(), Units::new(&cfg.units)))?;
 
     unit.common_mut().command.extend(args);

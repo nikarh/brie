@@ -70,7 +70,7 @@ impl Runner {
             .stderr(Stdio::inherit())
             .envs(&self.envs);
 
-        debug!("Running command: {:?}", command);
+        debug!("Running command: {command:?}");
 
         command
     }
