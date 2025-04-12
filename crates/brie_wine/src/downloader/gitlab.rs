@@ -34,7 +34,7 @@ impl Client {
         let release = match version {
             ReleaseVersion::Latest => {
                 releases.sort_by(|a, b| a.name.cmp(&b.name));
-                releases.into_iter().last()
+                releases.into_iter().next_back()
             }
             ReleaseVersion::Tag(tag) => {
                 let sub = format!("{repo}-{tag}.", repo = repo.repo);

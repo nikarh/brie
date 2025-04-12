@@ -149,21 +149,19 @@ fn run() -> Result<(), Error> {
             let sender = Arc::new(sender);
             let on_event = || {
                 let sender = sender.clone();
-                move |res: notify::Result<Event>| {
-                    match &res {
-                        Ok(event) => match event.kind {
-                            EventKind::Create(_)
-                            | EventKind::Modify(ModifyKind::Data(_))
-                            | EventKind::Remove(_) => {
-                                log::debug!("Received event: {event:?}");
-                                let _ = sender.send(());
-                            }
-                            _ => {}
-                        },
-                        Err(err) => {
-                            error!("Event error: {err}");
+                move |res: notify::Result<Event>| match &res {
+                    Ok(event) => match event.kind {
+                        EventKind::Create(_)
+                        | EventKind::Modify(ModifyKind::Data(_))
+                        | EventKind::Remove(_) => {
+                            log::debug!("Received event: {event:?}");
+                            let _ = sender.send(());
                         }
-                    };
+                        _ => {}
+                    },
+                    Err(err) => {
+                        error!("Event error: {err}");
+                    }
                 }
             };
 
@@ -206,7 +204,7 @@ fn run() -> Result<(), Error> {
 
             info!("Loop ended?");
         }
-    };
+    }
 
     Ok(())
 }

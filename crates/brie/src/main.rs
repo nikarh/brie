@@ -95,7 +95,7 @@ fn launch() -> Result<(), Error> {
 
             brie_wine::launch(&paths, &cfg.tokens.unwrap_or_default(), unit)?;
         }
-    };
+    }
 
     Ok(())
 }

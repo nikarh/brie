@@ -16,7 +16,7 @@ impl<'a> GitRepo<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for GitRepo<'a> {
+impl std::fmt::Display for GitRepo<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}/{}", self.owner, self.repo)
     }

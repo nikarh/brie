@@ -70,7 +70,7 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     // FIXME: find a better way to do this
     sunshine_config
         .apps
-        .retain(|a| !a.cmd.as_deref().map_or(false, |cmd| cmd.contains("brie ")));
+        .retain(|a| !a.cmd.as_deref().is_some_and(|cmd| cmd.contains("brie ")));
 
     config
         .units
