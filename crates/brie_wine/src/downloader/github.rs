@@ -179,14 +179,14 @@ mod test {
         let older = WineTkg
             .get_meta(
                 &Tokens::default(),
-                &ReleaseVersion::Tag("8992124483".into()),
+                &ReleaseVersion::Tag("20262169180".into()),
             )
             .unwrap();
 
-        assert_ne!(latest.version, "8992124483");
+        assert_ne!(latest.version, "20262169180");
         assert!(latest.url.starts_with("https"));
 
-        assert_eq!(older.version, "8992124483");
+        assert_eq!(older.version, "20262169180");
         assert!(older.url.starts_with("https"));
     }
 }
