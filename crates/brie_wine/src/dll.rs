@@ -72,7 +72,7 @@ mod dl {
         use crate::dll::dl::find_dl_path;
 
         #[test]
-        #[ignore]
+        #[ignore = "not really a test"]
         fn test_dl() {
             // FIXME: use a static asset instead of guessing system so
             assert_eq!(find_dl_path("libelf.so").unwrap(), "/usr/lib");

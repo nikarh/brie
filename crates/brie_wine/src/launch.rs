@@ -172,7 +172,7 @@ mod tests {
     use super::launch;
 
     #[test]
-    #[ignore]
+    #[ignore = "launches an infinite process"]
     pub fn test_run() {
         let log = simple_logger::SimpleLogger::new()
             .with_level(log::LevelFilter::Info)

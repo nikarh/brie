@@ -477,7 +477,7 @@ mod test {
     use crate::{library::ensure_library_exists, runtime::ensure_runtime_exists};
 
     #[test]
-    #[ignore]
+    #[ignore = "goes to internet to download stuff, not ideal for CI"]
     fn test_download() {
         let version = ReleaseVersion::Latest;
         let cache_dir = Path::new("./.tmp");

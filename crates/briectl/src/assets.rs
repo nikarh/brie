@@ -413,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "goes to the internet and is not byte-stable"]
     pub fn test_banners() {
         let res = image(TOKEN, ImageKind::Grid, 4265, "game")
             .unwrap()
