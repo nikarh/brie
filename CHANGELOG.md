@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.13] - 2025-12-16
+### Details
+#### Added
+- Support newer nvcuda versions by @nikarh
+
+#### Changed
+- Bump peter-evans/create-pull-request from 6 to 7 (#32) by @dependabot[bot] in #32
+- Bump actions/create-github-app-token from 1 to 2 (#33) by @dependabot[bot] in #33
+- Updated deps, added cargo-deny by @nikarh
+- Clippy by @nikarh
+- Bump actions/checkout from 4 to 5 (#34) by @dependabot[bot] in #34
+- Bump actions/upload-artifact from 4 to 5 (#35) by @dependabot[bot] in #35
+- Bump actions/checkout from 5 to 6 (#36) by @dependabot[bot] in #36
+- Bump actions/upload-artifact from 5 to 6 (#38) by @dependabot[bot] in #38
+- Bump peter-evans/create-pull-request from 7 to 8 (#37) by @dependabot[bot] in #37
+- Release v0.0.12 (#39) by @nikarh-release-bot[bot] in #39
+
+#### Fixed
+- Fixed build by @nikarh
+- Clippy by @nikarh
+- Failing test by @nikarh
+
+
 ## [0.0.12] - 2025-12-16
 ### Details
 #### Added
