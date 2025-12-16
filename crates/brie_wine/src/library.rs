@@ -103,7 +103,7 @@ impl Downloadable for WineGe {
             n if n.ends_with(".tar.xz") => untar(XzDecoder::new(lib), dest)?,
             n if n.ends_with(".tar.zst") => untar(ZstDecoder::new(lib)?, dest)?,
             _ => {
-                return Err(Error::UnknownFormat(release.filename.to_string()));
+                return Err(Error::UnknownFormat(release.filename.clone()));
             }
         }
 
@@ -232,7 +232,7 @@ impl Downloadable for Library {
             n if n.ends_with(".tar.xz") => untar(XzDecoder::new(lib), dest)?,
             n if n.ends_with(".tar.zst") => untar(ZstDecoder::new(lib)?, dest)?,
             _ => {
-                return Err(Error::UnknownFormat(release.filename.to_string()));
+                return Err(Error::UnknownFormat(release.filename.clone()));
             }
         }
 
@@ -259,7 +259,7 @@ fn contains_single_directory_with_substring(
 
     let entry = entries
         .next()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Directory is empty"))??;
+        .ok_or_else(|| io::Error::other("Directory is empty"))??;
     let entry_path = entry.path();
 
     if !entry_path.is_dir() {
@@ -277,7 +277,7 @@ fn contains_single_directory_with_substring(
 fn move_paths_to_parent_directory(target_path: &Path) -> Result<(), std::io::Error> {
     let parent = target_path
         .parent()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "Directory has no parent"))?;
+        .ok_or_else(|| io::Error::other("Directory has no parent"))?;
 
     let temp_path = parent.join(uuid::Uuid::new_v4().to_string());
 

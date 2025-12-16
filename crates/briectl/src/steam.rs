@@ -52,7 +52,7 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     let shortcuts = std::fs::read(&shortcuts_path).ok();
     let shortcuts = match shortcuts.as_ref() {
         Some(s) => {
-            info!("Reading shortcuts from {shortcuts_path:?}");
+            info!("Reading shortcuts from {}", shortcuts_path.display());
             parse_shortcuts(s).map_err(Error::Steam)?
         }
         None => {
@@ -65,7 +65,7 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
 
     // Remove shortcuts that are not in the config any more
     let (mut shortcuts, delete) = shortcuts.into_iter().partition::<Vec<_>, _>(|s| {
-        units.contains_key(s.launch_options) || !s.tags.iter().any(|&t| t == "brie")
+        units.contains_key(s.launch_options) || !s.tags.contains(&"brie")
     });
 
     // Remove images for deleted shortcuts
@@ -88,7 +88,7 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     // Update shortcuts that are in the config
     let update_iter = shortcuts
         .iter_mut()
-        .filter(|s| s.tags.iter().any(|&t| t == "brie"))
+        .filter(|s| s.tags.contains(&"brie"))
         .filter_map(|s| units.get(s.launch_options).map(|u| (s, u)));
 
     for (shortcut, unit) in update_iter {
@@ -128,10 +128,7 @@ pub fn update(exe: &str, assets: &Assets, config: &Brie) -> Result<(), Error> {
     }
 
     // Update icons
-    for shortcut in shortcuts
-        .iter_mut()
-        .filter(|s| s.tags.iter().any(|&t| t == "brie"))
-    {
+    for shortcut in shortcuts.iter_mut().filter(|s| s.tags.contains(&"brie")) {
         let icon = icons.get(&shortcut.app_id);
         let Some(icon) = icon else { continue };
         let Some(icon) = icon.to_str() else { continue };
@@ -174,7 +171,7 @@ fn copy_images(grid_path: &Path, app_id: u32, images: &Images) -> Result<(), Err
 
         let ext = image.extension().unwrap_or_default();
         let path = grid_path.join(name).with_extension(ext);
-        debug!("Copying image {image:?} to {path:?}");
+        debug!("Copying image {} to {}", image.display(), path.display());
         let _ = std::fs::copy(image, path)?;
     }
 
@@ -189,7 +186,7 @@ fn delete_images(images: &[PathBuf], id: u32) {
 
         let name = name.to_string_lossy();
         if name.starts_with(&format!("{id}_")) || name.starts_with(&format!("{id}p")) {
-            debug!("Removing image {image:?}");
+            debug!("Removing image {}", image.display());
             let _ = std::fs::remove_file(image);
         }
     }

@@ -106,7 +106,7 @@ impl<'a> Client<'a> {
 
                 format!("{id}")
             }
-            ReleaseVersion::Tag(tag) => tag.to_string(),
+            ReleaseVersion::Tag(tag) => tag.clone(),
         };
 
         // Get the workflow run
