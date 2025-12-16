@@ -219,9 +219,18 @@ impl Runner {
             }
             Library::NvidiaLibs => {
                 let libs = path.join("lib64").join("wine").join("x86_64-unix");
-                self.install_dlls(o, &libs, Arch::X64, &["nvcuda.dll.so", "nvoptix.dll.so"])?;
-                let libs = path.join("lib").join("wine").join("i386-unix");
-                self.install_dlls(o, &libs, Arch::X86, &["nvcuda.dll.so"])?;
+
+                if libs.exists() {
+                    // Older package uses fakedlls
+                    self.install_dlls(o, &libs, Arch::X64, &["nvcuda.dll.so", "nvoptix.dll.so"])?;
+                    let libs = path.join("lib").join("wine").join("i386-unix");
+                    self.install_dlls(o, &libs, Arch::X86, &["nvcuda.dll.so"])?;
+                } else {
+                    // Newer package uses dlls
+                    let dlls = &["nvcuda.dll", "nvoptix.dll"];
+                    self.install_dlls(o, &path.join("x64"), Arch::X64, dlls)?;
+                    self.install_dlls(o, &path.join("x32"), Arch::X86, &["nvcuda.dll"])?;
+                }
             }
         }
 
