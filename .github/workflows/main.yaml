@@ -14,7 +14,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - name: rust-toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.96.0
       - uses: cargo-bins/cargo-binstall@main
       - name: "Install `cargo-deny`"
         run: "cargo binstall -y cargo-deny"
@@ -34,7 +34,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
       - name: rust-toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.96.0
       - name: Build
         run: cargo build --release
       - name: Upload Artifacts
