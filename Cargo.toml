@@ -14,40 +14,39 @@ keywords = ["brie", "wine", "gaming"]
 categories = ["command-line-utilities"]
 
 [workspace.dependencies]
-thiserror = "1.0"
+thiserror = "2.0"
 path-absolutize = "3"
 libc = "0.2"
 fslock = "0.2"
 rayon = "1"
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4", features = ["derive"] }
-xdg = "2"
-which = "7"
+xdg = "3"
+which = "8"
 indexmap = { version = "2", features = ["serde", "rayon"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3"
 serde_json = "1.0"
 serde_yaml = "0.9"
-flate2 = "1.0"
+flate2 = "1.1"
 tar = "0.4"
 xz2 = "0.1"
 zstd = "0.13"
-zip = "1"
-ureq = { version = "2", default-features = false, features = ["json", "native-tls"] }
-native-tls = "0.2"
+zip = { version = "8", default-features = false, features = ["deflate"] }
+ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
 url = "2"
 log = "0.4"
 indicatif = "0.18"
-simple_logger = { version = "4", default-features = false, features = [
+simple_logger = { version = "5", default-features = false, features = [
     "colors",
     "stderr",
 ] }
 indicatif-log-bridge = "0.2"
 pretty_assertions = "1"
-image = "0.24"
-png = "0.17"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+png = "0.18"
 shellexpand = "3"
-notify = "6"
+notify = "8"
 steam_shortcuts_util = "1"
 
 [profile.release]

@@ -61,12 +61,17 @@ impl<'a> Client<'a> {
 
         info!("Downloading {version:?} release metadata from {url}");
 
-        let mut req = ureq()?.get(&url).set("Accept", ACCEPT_HEADER);
+        let mut req = ureq().get(&url).header("Accept", ACCEPT_HEADER);
         if let Some(token) = self.token {
-            req = req.set("Authorization", &format!("Bearer {token}"));
+            req = req.header("Authorization", format!("Bearer {token}"));
         }
 
-        let release: GhRelease = req.call().map_err(Box::new)?.into_json()?;
+        let release: GhRelease = req
+            .call()
+            .map_err(Box::new)?
+            .body_mut()
+            .read_json()
+            .map_err(Box::new)?;
 
         let asset = release
             .assets
@@ -92,12 +97,17 @@ impl<'a> Client<'a> {
             ReleaseVersion::Latest => {
                 let url = format!("https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/runs?status=success&per_page=1");
                 info!("Getting workflow run data from {url}");
-                let mut req = ureq()?.get(&url).set("Accept", ACCEPT_HEADER);
+                let mut req = ureq().get(&url).header("Accept", ACCEPT_HEADER);
                 if let Some(token) = self.token {
-                    req = req.set("Authorization", &format!("Bearer {token}"));
+                    req = req.header("Authorization", format!("Bearer {token}"));
                 }
 
-                let response: GhWorkflowRuns = req.call().map_err(Box::new)?.into_json()?;
+                let response: GhWorkflowRuns = req
+                    .call()
+                    .map_err(Box::new)?
+                    .body_mut()
+                    .read_json()
+                    .map_err(Box::new)?;
                 let id = response
                     .workflow_runs
                     .first()
@@ -113,12 +123,17 @@ impl<'a> Client<'a> {
         let url = format!("https://api.github.com/repos/{repo}/actions/runs/{run_id}/artifacts");
 
         info!("Downloading {run_id:?} workflow run metadata from {url}");
-        let mut req = ureq()?.get(&url).set("Accept", ACCEPT_HEADER);
+        let mut req = ureq().get(&url).header("Accept", ACCEPT_HEADER);
         if let Some(token) = self.token {
-            req = req.set("Authorization", &format!("Bearer {token}"));
+            req = req.header("Authorization", format!("Bearer {token}"));
         }
 
-        let response: GhArtifacts = req.call().map_err(Box::new)?.into_json()?;
+        let response: GhArtifacts = req
+            .call()
+            .map_err(Box::new)?
+            .body_mut()
+            .read_json()
+            .map_err(Box::new)?;
 
         let asset = response
             .artifacts

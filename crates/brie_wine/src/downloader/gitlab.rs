@@ -29,7 +29,13 @@ impl Client {
 
         info!("Downloading {version:?} release metadata from {url}");
 
-        let mut releases: Vec<GlFile> = ureq()?.get(&url).call().map_err(Box::new)?.into_json()?;
+        let mut releases: Vec<GlFile> = ureq()
+            .get(&url)
+            .call()
+            .map_err(Box::new)?
+            .body_mut()
+            .read_json()
+            .map_err(Box::new)?;
 
         let release = match version {
             ReleaseVersion::Latest => {
