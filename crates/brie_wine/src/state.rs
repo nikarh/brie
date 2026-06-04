@@ -7,7 +7,6 @@ use std::{
 use brie_cfg::Library;
 use log::info;
 use serde::{Deserialize, Serialize};
-use ureq::serde_json;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct State {

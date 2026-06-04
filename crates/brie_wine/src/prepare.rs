@@ -69,12 +69,12 @@ impl Runner {
         let symlinks = fs::read_dir(prefix.join("drive_c").join("users"))
             .map_err(WinePrefixError::Read)?
             .filter_map(Result::ok)
-            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
             .map(|e| e.path())
             .filter_map(|p| fs::read_dir(p).ok())
             .flatten()
             .filter_map(Result::ok)
-            .filter(|e| e.file_type().map(|t| t.is_symlink()).unwrap_or(false))
+            .filter(|e| e.file_type().is_ok_and(|t| t.is_symlink()))
             .map(|e| e.path());
 
         for symlink in symlinks {

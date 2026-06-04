@@ -6,7 +6,7 @@ use std::{
 };
 
 use brie_cfg::Brie;
-use brie_download::{download_file, mp, ureq, TlsError};
+use brie_download::{download_file, mp, ureq};
 use image::{GenericImageView, ImageFormat};
 use indicatif::{ProgressBar, ProgressFinish, ProgressStyle};
 use log::{debug, error, info, warn};
@@ -15,8 +15,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("TLS error. {0}")]
-    Tls(#[from] &'static TlsError),
     #[error("Download error. {0}")]
     Download(#[from] brie_download::Error),
     #[error("HTTP error. {0}")]
@@ -53,12 +51,14 @@ fn autocomplete(token: &str, name: &str) -> Result<Option<u32>, Error> {
         .map_err(|()| Error::InvalidUrl)?
         .push(name);
 
-    let res: Container<Vec<AutocompleteResponse>> = ureq()?
-        .request_url("GET", &url)
-        .set("Authorization", &format!("Bearer {token}"))
+    let res: Container<Vec<AutocompleteResponse>> = ureq()
+        .get(url.as_str())
+        .header("Authorization", format!("Bearer {token}"))
         .call()
         .map_err(Box::new)?
-        .into_json()?;
+        .body_mut()
+        .read_json()
+        .map_err(Box::new)?;
 
     Ok(res.data.first().map(|r| r.id))
 }
@@ -136,12 +136,14 @@ fn image(token: &str, kind: ImageKind, id: u32, name: &str) -> Result<Option<Vec
         kind = kind.path()
     );
 
-    let res: Container<Vec<ImageResponse>> = ureq()?
+    let res: Container<Vec<ImageResponse>> = ureq()
         .get(&url)
-        .set("Authorization", &format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {token}"))
         .call()
         .map_err(Box::new)?
-        .into_json()?;
+        .body_mut()
+        .read_json()
+        .map_err(Box::new)?;
 
     let Some(url) = kind.filter(&res.data) else {
         return Ok(None);
@@ -194,8 +196,8 @@ fn convert_to_png(image: &[u8]) -> Result<Vec<u8>, Error> {
     let mut encoder = png::Encoder::new(&mut png, width, height);
     encoder.set_color(color_type);
     encoder.set_depth(png::BitDepth::Eight);
-    encoder.set_compression(png::Compression::Default);
-    encoder.set_filter(png::FilterType::NoFilter);
+    encoder.set_compression(png::Compression::default());
+    encoder.set_filter(png::Filter::NoFilter);
 
     let mut writer = encoder.write_header()?;
     writer.write_image_data(&image)?;

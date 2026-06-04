@@ -1,10 +1,4 @@
-use std::{
-    borrow::Cow,
-    io,
-    sync::{Arc, OnceLock},
-};
-
-pub use native_tls::Error as TlsError;
+use std::{borrow::Cow, io, sync::OnceLock};
 
 use indicatif::{MultiProgress, ProgressBar, ProgressFinish, ProgressState, ProgressStyle};
 
@@ -15,22 +9,18 @@ pub fn mp() -> &'static MultiProgress {
     MP.get_or_init(MultiProgress::new)
 }
 
-pub fn ureq() -> Result<&'static ureq::Agent, &'static native_tls::Error> {
-    static AGENT: OnceLock<Result<ureq::Agent, native_tls::Error>> = OnceLock::new();
-    AGENT
-        .get_or_init(|| {
-            Ok(ureq::AgentBuilder::new()
-                .user_agent(USER_AGENT_HEADER)
-                .tls_connector(Arc::new(native_tls::TlsConnector::new()?))
-                .build())
-        })
-        .as_ref()
+pub fn ureq() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        ureq::Agent::config_builder()
+            .user_agent(USER_AGENT_HEADER)
+            .build()
+            .into()
+    })
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("TLS error. {0}")]
-    Tls(#[from] &'static TlsError),
     #[error("Http error. {0}")]
     Ureq(#[from] Box<ureq::Error>),
 }
@@ -40,17 +30,19 @@ pub fn download_file(
     authorization: Option<&str>,
 ) -> Result<DownloadStream<impl io::Read>, Error> {
     let req = match authorization {
-        Some(header) => ureq()?.get(url).set("Authorization", header),
-        None => ureq()?.get(url),
+        Some(header) => ureq().get(url).header("Authorization", header),
+        None => ureq().get(url),
     };
 
     let response = req.call().map_err(Box::new)?;
 
     let len = response
-        .header("Content-Length")
+        .headers()
+        .get("Content-Length")
+        .and_then(|h| h.to_str().ok())
         .and_then(|h| h.parse::<usize>().ok());
 
-    let body = response.into_reader();
+    let body = response.into_parts().1.into_reader();
 
     Ok(DownloadStream { body, len })
 }

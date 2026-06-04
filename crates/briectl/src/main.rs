@@ -96,9 +96,9 @@ enum Error {
 
 fn run() -> Result<(), Error> {
     let cli = Cli::parse();
-    let xdg = xdg::BaseDirectories::with_prefix("brie")?;
-    let cache_dir = xdg.get_data_home();
-    let config_file = xdg.get_config_file("brie.yaml");
+    let xdg = xdg::BaseDirectories::with_prefix("brie");
+    let cache_dir = xdg.place_data_file("")?;
+    let config_file = xdg.place_config_file("brie.yaml")?;
     let exe = exe::path();
 
     match cli.command {

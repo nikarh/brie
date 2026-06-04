@@ -382,7 +382,7 @@ pub fn ensure_library_exists(
 
     if version_dir.exists() {
         if matches!(version, ReleaseVersion::Latest)
-            && time_since_update.is_none_or(|d| d > Duration::from_secs(86400))
+            && time_since_update.is_none_or(|d| d > Duration::from_hours(24))
         {
             info!("Checking latest release for {name} {version:?}");
             let release = match library.get_meta(tokens, version) {

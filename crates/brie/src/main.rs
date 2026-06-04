@@ -41,6 +41,8 @@ impl std::fmt::Display for Units {
 enum Error {
     #[error("Xdg error. {0}")]
     Xdg(#[from] xdg::BaseDirectoriesError),
+    #[error("IO error. {0}")]
+    Io(#[from] std::io::Error),
     #[error("Config error. {0}")]
     Config(#[from] brie_cfg::Error),
     #[error("Unit not provided as an argument. Available units:\n{0}")]
@@ -54,12 +56,12 @@ enum Error {
 }
 
 fn launch() -> Result<(), Error> {
-    let xdg = xdg::BaseDirectories::with_prefix("brie")?;
+    let xdg = xdg::BaseDirectories::with_prefix("brie");
 
-    let config_home = xdg.get_config_home();
-    let data_home = xdg.get_data_home();
+    let config_file = xdg.place_config_file("brie.yaml")?;
+    let data_home = xdg.place_data_file("")?;
 
-    let mut cfg = brie_cfg::read(config_home.join("brie.yaml"))?;
+    let mut cfg = brie_cfg::read(config_file)?;
 
     let mut args = args();
     let name = args
