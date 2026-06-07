@@ -43,4 +43,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: binary
-          path: target/release/brie(|ctl)
+          path: |
+            target/release/brie
+            target/release/briectl
+          if-no-files-found: error
