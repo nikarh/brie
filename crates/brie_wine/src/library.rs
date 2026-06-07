@@ -206,7 +206,7 @@ impl Downloadable for Library {
             Library::NvidiaLibs => github::Client::new(tokens.github.as_deref()).release(
                 GitRepo::new("SveSop", "nvidia-libs"),
                 version,
-                with_suffix(".tar.xz"),
+                is_nvidia_libs_archive,
             ),
         }
     }
@@ -240,6 +240,12 @@ impl Downloadable for Library {
 
         Ok(())
     }
+}
+
+fn is_nvidia_libs_archive(asset: &github::GhAsset) -> bool {
+    asset.name.starts_with("nvidia-libs")
+        && asset.name.ends_with(".tar.xz")
+        && !asset.name.contains("-fakedll")
 }
 
 fn untar(tar: impl io::Read, destination: impl AsRef<Path>) -> Result<(), io::Error> {
@@ -526,5 +532,30 @@ mod test {
         });
 
         // FIXME add assertions
+    }
+
+    #[test]
+    fn nvidia_libs_archive_matcher_skips_auxiliary_archives() {
+        let matching = crate::downloader::github::GhAsset {
+            name: "nvidia-libs-v1.0.2.tar.xz".to_owned(),
+            browser_download_url: String::new(),
+        };
+        let old_matching = crate::downloader::github::GhAsset {
+            name: "nvidia-libs.tar.xz".to_owned(),
+            browser_download_url: String::new(),
+        };
+        let fakedll = crate::downloader::github::GhAsset {
+            name: "nvidia-libs-v1.0.2-fakedll.tar.xz".to_owned(),
+            browser_download_url: String::new(),
+        };
+        let nvcuda32 = crate::downloader::github::GhAsset {
+            name: "nvcuda32-v0.4.tar.xz".to_owned(),
+            browser_download_url: String::new(),
+        };
+
+        assert!(super::is_nvidia_libs_archive(&matching));
+        assert!(super::is_nvidia_libs_archive(&old_matching));
+        assert!(!super::is_nvidia_libs_archive(&fakedll));
+        assert!(!super::is_nvidia_libs_archive(&nvcuda32));
     }
 }

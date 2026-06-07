@@ -87,3 +87,13 @@ impl Runner {
         &self.prefix
     }
 }
+
+#[cfg(test)]
+impl Runner {
+    pub(crate) fn test(prefix: PathBuf) -> Self {
+        Self {
+            envs: IndexMap::new(),
+            prefix,
+        }
+    }
+}
