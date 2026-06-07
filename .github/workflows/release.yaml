@@ -1,7 +1,11 @@
 name: Release
 
+permissions:
+  contents: read
+  pull-requests: read
+
 on:
-  pull_request:
+  pull_request_target:
     types:
       - closed
     branches:
@@ -11,7 +15,15 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     environment: release
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'release')
+    if: >
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'release' &&
+      contains(github.event.pull_request.labels.*.name, 'release') &&
+      startsWith(github.event.pull_request.title, 'Release v')
     steps:
       - name: Generate GitHub token
         uses: actions/create-github-app-token@v3
@@ -19,11 +31,18 @@ jobs:
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
       - name: Checkout Code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          token: ${{ steps.generate-token.outputs.token }}
       - name: Extract version from PR title
         id: tag
-        run: echo "${{ github.event.pull_request.title }}" | awk '{print "name="  $2}' >> "$GITHUB_OUTPUT"
+        run: |
+          version="$(jq -r '.pull_request.title | capture("^Release (?<version>v[0-9]+\\.[0-9]+\\.[0-9]+)$").version' "$GITHUB_EVENT_PATH")"
+          echo "name=$version" >> "$GITHUB_OUTPUT"
       - name: Push a new tag
         id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
