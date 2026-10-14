@@ -116,7 +116,7 @@ checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
 name = "brie"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "brie_cfg",
  "brie_wine",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "brie_cfg"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "indexmap 2.14.2",
  "pretty_assertions",
@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "brie_download"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "indicatif",
  "thiserror",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "brie_wine"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "brie_cfg",
  "brie_download",
@@ -182,7 +182,7 @@ dependencies = [
 
 [[package]]
 name = "briectl"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "brie_cfg",
  "brie_download",
