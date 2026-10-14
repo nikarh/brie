@@ -5,3 +5,18 @@ updates:
     rebase-strategy: "auto"
     schedule:
       interval: "weekly"
+    groups:
+      github-actions:
+        patterns: ["*"]
+    ignore:
+      # The action has branches for Rust versions that are not released yet;
+      # the toolchain is bumped manually.
+      - dependency-name: "dtolnay/rust-toolchain"
+  - package-ecosystem: "cargo"
+    directory: "/"
+    rebase-strategy: "auto"
+    schedule:
+      interval: "weekly"
+    groups:
+      cargo-minor-patch:
+        update-types: ["minor", "patch"]

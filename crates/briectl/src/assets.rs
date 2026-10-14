@@ -420,11 +420,11 @@ mod tests {
         let res = image(TOKEN, ImageKind::Grid, 4265, "game")
             .unwrap()
             .unwrap();
-        assert!(res == std::fs::read("tests/grid.png").unwrap());
+        assert_eq!(res, std::fs::read("tests/grid.png").unwrap());
         let res = image(TOKEN, ImageKind::Icon, 4265, "game")
             .unwrap()
             .unwrap();
-        assert!(res == std::fs::read("tests/icon.png").unwrap());
+        assert_eq!(res, std::fs::read("tests/icon.png").unwrap());
     }
 
     #[test]

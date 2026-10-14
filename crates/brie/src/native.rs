@@ -62,7 +62,7 @@ fn resolve<'a>(cd: Option<&str>, command: &'a str) -> Result<Cow<'a, str>, Error
     Ok(if let Some(cd) = cd {
         Cow::Owned(
             Path::new(&*command)
-                .absolutize_from(Path::new(cd))?
+                .absolutize_from(Path::new(cd))
                 .to_string_lossy()
                 .to_string(),
         )

@@ -191,17 +191,17 @@ mod test {
         let latest = WineTkg
             .get_meta(&Tokens::default(), &ReleaseVersion::Latest)
             .unwrap();
-        let older = WineTkg
+        // Workflow artifacts expire, so an older run can't be pinned here.
+        let pinned = WineTkg
             .get_meta(
                 &Tokens::default(),
-                &ReleaseVersion::Tag("20262169180".into()),
+                &ReleaseVersion::Tag(latest.version.clone()),
             )
             .unwrap();
 
-        assert_ne!(latest.version, "20262169180");
         assert!(latest.url.starts_with("https"));
 
-        assert_eq!(older.version, "20262169180");
-        assert!(older.url.starts_with("https"));
+        assert_eq!(pinned.version, latest.version);
+        assert!(pinned.url.starts_with("https"));
     }
 }

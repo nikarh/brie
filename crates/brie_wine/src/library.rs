@@ -404,7 +404,7 @@ pub fn ensure_library_exists(
             let latest_version = latest_version.file_name().unwrap_or_default();
 
             if latest_version == &*release.version {
-                debug!("Latest version for {name} is still {}", &release.version);
+                debug!("Latest version for {name} is still {}", release.version);
                 return Ok(State::new(version_dir, true));
             }
 

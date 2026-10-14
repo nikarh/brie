@@ -52,6 +52,7 @@ allow-wildcard-paths = true
 
 skip = [
     { name = "getrandom", version = "0.2.17", reason = "ring has not updated to getrandom 0.4" },
+    { name = "miniz_oxide", version = "0.8.9", reason = "png has not updated to miniz_oxide 0.9" },
 ]
 
 [sources]

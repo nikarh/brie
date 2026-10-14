@@ -154,7 +154,7 @@ pub enum Error {
     #[error("IO error. {0}")]
     Io(#[from] io::Error),
     #[error("Yaml error. {0}")]
-    Yaml(#[from] serde_yaml::Error),
+    Yaml(#[from] serde_saphyr::Error),
     #[error("Config file does not exist at `{0}`")]
     NoConfig(PathBuf),
 }
@@ -164,18 +164,9 @@ pub fn read(path: PathBuf) -> Result<Brie, Error> {
         return Err(Error::NoConfig(path));
     }
 
-    let cfg = std::fs::read(&path)?;
-    let mut cfg: serde_yaml::Value = serde_yaml::from_slice(&cfg)?;
+    let cfg = std::fs::read_to_string(&path)?;
 
-    // FIXME: find a way to apply merges recursively
-    // https://github.com/dtolnay/serde-yaml/issues/362
-    cfg.apply_merge()?;
-    cfg.apply_merge()?;
-    cfg.apply_merge()?;
-
-    let cfg: Brie = serde_yaml::from_value(cfg)?;
-
-    Ok(cfg)
+    Ok(serde_saphyr::from_str(&cfg)?)
 }
 
 #[cfg(test)]
@@ -187,13 +178,35 @@ mod tests {
     #[test]
     fn serialize() {
         let cfg = include_str!("../tests/test.yaml");
-        let mut cfg: serde_yaml::Value = serde_yaml::from_str(cfg).unwrap();
-        cfg.apply_merge().unwrap();
-        let cfg: Brie = serde_yaml::from_value(cfg).unwrap();
+        let cfg: Brie = serde_saphyr::from_str(cfg).unwrap();
 
         assert_eq!(
             &format!("{cfg:#?}"),
             include_str!("../tests/test.ron").trim_end()
         );
+    }
+
+    #[test]
+    fn nested_merge() {
+        let cfg = r"
+x-base: &base
+  env:
+    A: base
+  wrapper: [gamemoderun]
+x-derived: &derived
+  <<: *base
+  name: Derived
+units:
+  game:
+    <<: *derived
+    command: [game.exe]
+";
+        let cfg: Brie = serde_saphyr::from_str(cfg).unwrap();
+        let unit = cfg.units["game"].common();
+
+        assert_eq!(unit.name.as_deref(), Some("Derived"));
+        assert_eq!(unit.env["A"], "base");
+        assert_eq!(unit.wrapper, ["gamemoderun"]);
+        assert_eq!(unit.command, ["game.exe"]);
     }
 }

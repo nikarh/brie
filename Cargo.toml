@@ -15,7 +15,7 @@ categories = ["command-line-utilities"]
 
 [workspace.dependencies]
 thiserror = "2.0"
-path-absolutize = "3"
+path-absolutize = "4"
 libc = "0.2"
 fslock = "0.2"
 rayon = "1"
@@ -27,12 +27,12 @@ indexmap = { version = "2", features = ["serde", "rayon"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_with = "3"
 serde_json = "1.0"
-serde_yaml = "0.9"
+serde-saphyr = { version = "2", default-features = false, features = ["deserialize"] }
 flate2 = "1.1"
 tar = "0.4"
 xz2 = "0.1"
-zstd = "0.13"
-zip = { version = "8", default-features = false, features = ["deflate"] }
+zstd = "0.14"
+zip = { version = "9", default-features = false, features = ["deflate"] }
 ureq = { version = "3", default-features = false, features = ["json", "rustls"] }
 url = "2"
 log = "0.4"
