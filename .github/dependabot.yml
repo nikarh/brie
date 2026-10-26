@@ -17,6 +17,9 @@ updates:
     rebase-strategy: "auto"
     schedule:
       interval: "weekly"
+    allow:
+      # Also bump transitive dependencies in Cargo.lock.
+      - dependency-type: "all"
     groups:
       cargo-minor-patch:
         update-types: ["minor", "patch"]
